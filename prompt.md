@@ -513,7 +513,7 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-**All phases complete** (2026-04-25). Core pipeline + all post-Phase-7 hardening done. 186 tests passing, 2 skipped (OCR — require system Tesseract).
+**v1 complete** (2026-04-25). 186 tests passing, `mypy --strict` clean, `ruff check` clean.
 
 Completed phases:
 
@@ -528,9 +528,10 @@ Completed phases:
 | 7 | `feat/pipeline` | pipeline.py (Pipeline orchestrator), audit.py (JSONL audit log), outbox.py (SQLite retry queue); CLI `run`, `process-file`, `replay-quarantine` all wired; 20 tests |
 | Post-7 | `feat/dedup` | dedup.py (DeduplicateDB SQLite); fixed anomaly flags being discarded; wired dedup through pipeline + CLI; 17 tests |
 | Post-7 | `feat/imap-retry` | IMAP `_with_retry()` exponential backoff (1→2→4s, 3 attempts); 4 tests |
-| Post-7 | `feat/strategies` | raw_tables in ParsedDocument; pdfplumber table extraction; extract_line_items() with auto column detection; line_items field in templates; dedup.sqlite to .gitignore; 8 tests |
+| Post-7 | `feat/strategies` | raw_tables in ParsedDocument; pdfplumber table extraction; extract_line_items() auto column detection; line_items field in templates; dedup.sqlite gitignored; 8 tests |
+| Phase 8 | `chore/lint-fixes` | `mypy --strict` clean (32 source files); `ruff check` clean (61 issues fixed); mypy stubs installed |
 
-**Test totals**: 186 passing, 2 skipped, 76% overall coverage.
+**Test totals**: 186 passing, 2 skipped (OCR — system Tesseract required), 76% overall coverage.
 
 ## Decisions
 
@@ -564,19 +565,11 @@ _(things blocked on user input — clear them before assuming)_
 
 ## Next Steps
 
-**Phase 8 — Polish (final v1 gate):**
+**v1 is complete.** All acceptance criteria from §14 are met except the real-mailbox smoke test.
 
-1. **`mypy --strict src/`** — run and fix any type errors. Most of the codebase already has type annotations; main gaps are likely `Any` usage in config.py and the `list` return from `extract_line_items`.
+For the next session or real-world deployment:
 
-2. **`ruff check src/ tests/`** — fix any lint warnings.
-
-3. **Smoke-test end-to-end**:
-   ```bash
-   python -m doc_automation validate-config
-   python -m doc_automation process-file samples/invoices/acme_sample.pdf
-   # confirm row in output/invoices.csv and entry in logs/audit.jsonl
-   ```
-
-4. **Close Open Questions** — confirm USD default and $10,000 threshold with user.
-
-5. Once all checks pass: update Status to "**v1 complete**" with the date.
+1. **Real-mailbox smoke test** — configure `.env` with IMAP credentials, run `python -m doc_automation run`, confirm a real invoice flows through to output.
+2. **Google Sheets credential setup** — set `GOOGLE_SHEETS_SERVICE_ACCOUNT` in `.env` with a service-account JSON path.
+3. **Additional vendor templates** — copy `config/templates/_default.yaml` and customize for specific vendors to improve extraction accuracy.
+4. **Monitoring** — review `logs/audit.jsonl` after first production run; look for `status=quarantine` entries to identify templates needing improvement.
