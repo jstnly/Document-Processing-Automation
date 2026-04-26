@@ -285,7 +285,7 @@ src/doc_automation/
   extraction/              # template engine + strategies + Invoice dataclass
   validation/              # COA matching + 11 anomaly rules
   output/                  # CSV / Excel / Google Sheets adapters
-tests/                     # 152 tests, 74% coverage
+tests/                     # 260 tests, 95% coverage
 logs/                      # audit.jsonl (created at runtime, gitignored)
 working/                   # temporary attachment downloads (gitignored)
 quarantine/                # failed invoices (gitignored)

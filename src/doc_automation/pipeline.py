@@ -189,7 +189,7 @@ class Pipeline:
 
         invoice.source_email_id = email_id
         invoice.attachment_sha256 = _sha256(path)
-        match_gl_code(invoice, self._coa)
+        invoice.gl_code = match_gl_code(invoice, self._coa)
         new_flags = run_anomaly_checks(
             invoice, self._rules, self._config.defaults, dedup_db=self._dedup
         )
@@ -226,7 +226,7 @@ class Pipeline:
         invoice.source_email_id = email_id
         invoice.attachment_sha256 = _sha256(path)
         invoice.processed_at = datetime.now(tz=UTC)
-        match_gl_code(invoice, self._coa)
+        invoice.gl_code = match_gl_code(invoice, self._coa)
         new_flags = run_anomaly_checks(
             invoice, self._rules, self._config.defaults, dedup_db=self._dedup
         )
