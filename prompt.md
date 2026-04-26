@@ -513,7 +513,7 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-**v1 complete** (2026-04-25). 186 tests passing, `mypy --strict` clean, `ruff check` clean.
+**v1 complete** (2026-04-25). 211 tests passing, `mypy --strict` clean, `ruff check` clean.
 
 Completed phases:
 
@@ -530,8 +530,10 @@ Completed phases:
 | Post-7 | `feat/imap-retry` | IMAP `_with_retry()` exponential backoff (1→2→4s, 3 attempts); 4 tests |
 | Post-7 | `feat/strategies` | raw_tables in ParsedDocument; pdfplumber table extraction; extract_line_items() auto column detection; line_items field in templates; dedup.sqlite gitignored; 8 tests |
 | Phase 8 | `chore/lint-fixes` | `mypy --strict` clean (32 source files); `ruff check` clean (61 issues fixed); mypy stubs installed |
+| Phase 8 | `feat/coverage-gaps` | anchor strategy tests, template error paths, extract_field dispatch; 23 tests; all modules ≥85% coverage |
+| Phase 8 | `chore/final-polish` | pydantic validation error + no-header table path coverage; 2 tests |
 
-**Test totals**: 186 passing, 2 skipped (OCR — system Tesseract required), 76% overall coverage.
+**Test totals**: 211 passing, 2 skipped (OCR — system Tesseract required), all modules ≥85% coverage.
 
 ## Decisions
 
