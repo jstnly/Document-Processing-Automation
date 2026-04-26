@@ -105,8 +105,8 @@ mypy src/
 
 ## v1 status (2026-04-26)
 
-- **257 tests passing**, 2 skipped (OCR — require system Tesseract), 94% total coverage
-- `pipeline.py`, `anomaly.py`, `coa.py` 100%; `cli.py` 98%
+- **259 tests passing**, 2 skipped (OCR — require system Tesseract), 95% total coverage
+- `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py`, `outbox.py`, `sheets.py` all at 100%
 - **`mypy --strict`** clean across all 32 source files
 - **`ruff check`** clean (61 issues fixed in Phase 8)
 - All 8 phases complete + post-Phase-7 hardening (dedup, IMAP retry, line item extraction)
