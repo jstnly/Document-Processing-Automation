@@ -6,6 +6,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from doc_automation.config import AnomalyRule, AnomalyRulesConfig, COARow, DefaultsConfig
 from doc_automation.extraction.invoice import Invoice, LineItem
 from doc_automation.validation.anomaly import has_blocking_anomaly, run_anomaly_checks
@@ -250,3 +252,76 @@ def test_all_project_rules_run_on_clean_invoice() -> None:
     flags = run_anomaly_checks(inv, rules, _defaults())
     assert "missing_required_field" not in flags
     assert "math_mismatch_total" not in flags
+
+
+# ── COA edge cases ────────────────────────────────────────────────────────────
+
+
+def test_coa_bad_vendor_regex_logs_warning_and_skips() -> None:
+    """coa.py:35-36 — invalid vendor_match regex is logged and skipped."""
+    rows = [
+        COARow(gl_code="6001", name="Bad regex", vendor_match="[invalid"),
+        COARow(gl_code="6999", name="Default", default_for_unmatched=True),
+    ]
+    inv = _make_invoice(vendor_name="Anything")
+    code = match_gl_code(inv, rows)
+    assert code == "6999"  # fell through to default
+    assert "unknown_gl_code" in inv.anomaly_flags
+
+
+def test_coa_bad_keyword_regex_logs_warning_and_skips() -> None:
+    """coa.py:53-54 — invalid keyword_match regex is logged and skipped."""
+    rows = [
+        COARow(gl_code="6001", name="Bad keyword regex", keyword_match="[invalid"),
+        COARow(gl_code="6999", name="Default", default_for_unmatched=True),
+    ]
+    from doc_automation.extraction.invoice import LineItem
+    inv = _make_invoice(
+        vendor_name="Nobody",
+        line_items=[LineItem(description="Office Supplies", amount=Decimal("50.00"))],
+    )
+    code = match_gl_code(inv, rows)
+    assert code == "6999"
+
+
+def test_coa_no_default_row_raises() -> None:
+    """coa.py:69 — missing default row raises ValueError."""
+    rows = [COARow(gl_code="6001", name="Only row", vendor_match="acme")]
+    inv = _make_invoice(vendor_name="Unknown Vendor")
+    with pytest.raises(ValueError, match="No default COA row"):
+        match_gl_code(inv, rows)
+
+
+# ── Anomaly edge cases ────────────────────────────────────────────────────────
+
+
+def test_tax_rate_zero_subtotal_not_flagged() -> None:
+    """anomaly.py:83 — zero subtotal returns False (no division by zero)."""
+    inv = _make_invoice(subtotal=Decimal("0"), tax_amount=Decimal("0"), total=Decimal("0"))
+    rules = _make_rules(("tax_rate_out_of_range", "warn"))
+    flags = run_anomaly_checks(inv, rules, _defaults())
+    assert "tax_rate_out_of_range" not in flags
+
+
+def test_run_anomaly_unknown_rule_name_logged() -> None:
+    """anomaly.py:163 — unknown rule name logs warning, does not raise."""
+    rules = _make_rules(("nonexistent_rule_xyz", "warn"))
+    inv = _make_invoice()
+    flags = run_anomaly_checks(inv, rules, _defaults())
+    assert "nonexistent_rule_xyz" not in flags
+
+
+def test_run_anomaly_rule_exception_logged() -> None:
+    """anomaly.py:164-165 — exception inside a rule check is caught and logged."""
+    from unittest.mock import patch
+
+    rules = _make_rules(("amount_threshold", "warn"))
+    inv = _make_invoice()
+
+    with patch(
+        "doc_automation.validation.anomaly._check_amount_threshold",
+        side_effect=RuntimeError("boom"),
+    ):
+        flags = run_anomaly_checks(inv, rules, _defaults())
+
+    assert "amount_threshold" not in flags  # exception swallowed, rule skipped

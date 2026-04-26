@@ -199,6 +199,46 @@ class TestOutbox:
         assert len(outbox2) == 1
         outbox2.close()
 
+    def test_roundtrip_with_line_items(self, tmp_path: Path) -> None:
+        """outbox.py:53-55 — line items with numeric quantity/unit_price/amount serialised."""
+        from decimal import Decimal as D
+
+        from doc_automation.extraction.invoice import LineItem
+
+        inv = make_invoice(number="LI-01")
+        inv.line_items = [
+            LineItem(description="Widget", quantity=D("2"), unit_price=D("10.00"), amount=D("20.00")),
+            LineItem(description="Tax", quantity=None, unit_price=None, amount=None),
+        ]
+        outbox = Outbox(tmp_path / "outbox.sqlite")
+        outbox.put(inv, "err")
+        _, restored = outbox.drain()[0]
+        assert len(restored.line_items) == 2
+        assert restored.line_items[0].quantity == D("2")
+        assert restored.line_items[0].amount == D("20.00")
+        assert restored.line_items[1].quantity is None
+
+    def test_drain_skips_corrupted_entry(self, tmp_path: Path) -> None:
+        """outbox.py:114-115 — corrupted JSON in outbox is logged and skipped."""
+        from datetime import UTC, datetime
+
+        db_path = tmp_path / "outbox.sqlite"
+        outbox = Outbox(db_path)
+        now = datetime.now(tz=UTC).isoformat()
+        outbox._conn.execute(
+            "INSERT INTO outbox (created_at, next_retry_at, invoice_json, last_error) "
+            "VALUES (?, ?, ?, ?)",
+            (now, now, "{{invalid json}}", "original error"),
+        )
+        outbox._conn.commit()
+        result = outbox.drain()
+        assert result == []  # corrupted entry skipped, no exception
+
+    def test_reschedule_nonexistent_entry_is_noop(self, tmp_path: Path) -> None:
+        """outbox.py:128 — reschedule with unknown entry_id is a no-op."""
+        outbox = Outbox(tmp_path / "outbox.sqlite")
+        outbox.reschedule(9999, "irrelevant")  # must not raise
+
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
