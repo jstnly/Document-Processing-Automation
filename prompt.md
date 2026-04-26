@@ -513,7 +513,7 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-**v1 complete** (2026-04-25). 211 tests passing, `mypy --strict` clean, `ruff check` clean.
+**v1 complete** (2026-04-26). 222 tests passing, `mypy --strict` clean, `ruff check` clean, `pipeline.py` 100% coverage.
 
 Completed phases:
 
@@ -532,8 +532,9 @@ Completed phases:
 | Phase 8 | `chore/lint-fixes` | `mypy --strict` clean (32 source files); `ruff check` clean (61 issues fixed); mypy stubs installed |
 | Phase 8 | `feat/coverage-gaps` | anchor strategy tests, template error paths, extract_field dispatch; 23 tests; all modules ≥85% coverage |
 | Phase 8 | `chore/final-polish` | pydantic validation error + no-header table path coverage; 2 tests |
+| Post-v1 | `feat/pipeline-coverage` | Fix outbox guard bug (`if self._outbox:` → `is not None`); 11 pipeline tests; pipeline.py 100% coverage |
 
-**Test totals**: 211 passing, 2 skipped (OCR — system Tesseract required), all modules ≥85% coverage.
+**Test totals**: 222 passing, 2 skipped (OCR — system Tesseract required), `pipeline.py` 100% coverage.
 
 ## Decisions
 
