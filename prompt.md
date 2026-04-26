@@ -513,26 +513,45 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-_Project not yet started. Next session: begin Phase 1 (`feat/foundation`)._
+**Phase 1 complete** (2026-04-25). `CLAUDE.md` created. Git history: prompt → Phase 1 foundation, both merged to main via --no-ff.
+
+Completed:
+- `pyproject.toml`, `.gitignore`, `.env.example`
+- `src/doc_automation/{__init__, __main__, cli, config}.py`
+- `config/config.yaml`, `anomaly_rules.yaml` (11 rules), `chart_of_accounts.csv` (10 GL codes), `output.yaml`, `templates/_default.yaml`
+- `tests/test_config.py`: 19 tests, 93% coverage on `config.py`
+- `python -m doc_automation validate-config` → green
+- `CLAUDE.md` created
+
+**Currently on**: Phase 2 (`feat/parsing`)
 
 ## Decisions
 
 _(append-only log — most recent at top, format: `YYYY-MM-DD — <decision> — <one-line why>`)_
 
-- _(none yet)_
+- **2026-04-25** — `mailbox` is `Optional[MailboxConfig]` — allows running `process-file` without email config; correct for Phase 1 scope
+- **2026-04-25** — `load_all_configs()` collects all errors before raising — better UX than stopping at first failure
+- **2026-04-25** — `argparse` (stdlib) over `click` — fewer deps; subcommands are simple
+- **2026-04-25** — `hatchling` build backend — zero-config for `src/` layout
+- **2026-04-25** — Stub unbuilt commands return 0 with a stderr note — CLI exercisable without crashing
 
 ## Open Questions
 
 _(things blocked on user input — clear them before assuming)_
 
-- **Which email provider should the IMAP adapter be smoke-tested against first?** (Gmail w/ App Password, Outlook IMAP, generic IMAP server) — needed before Phase 8.
-- **Which Google account / service-account credentials will be used for the Sheets adapter?** — needed before Phase 7; mark Phase 7 optional otherwise.
-- **What is the configured default currency?** Assumed `USD` for now; change if needed.
-- **What is the amount-threshold for the `amount_threshold` rule?** Defaulted to $10,000.
+- **Which email provider to smoke-test IMAP adapter against first?** (Gmail App Password, Outlook IMAP, or generic) — needed before Phase 6 (email ingestion).
+- **Which Google account / service-account for Sheets adapter?** — needed before Phase 7 (Sheets output); mark that adapter optional if no creds provided.
+- **Default currency confirmed as USD?** Assumed yes; update `config/config.yaml` if different.
+- **Amount threshold confirmed as $10,000?** Assumed yes; update `config/anomaly_rules.yaml` params if different.
 
 ## Next Steps
 
-1. Branch `feat/foundation`: create `pyproject.toml`, `.gitignore`, `.env.example`, `src/doc_automation/{__init__,__main__,cli,config}.py`, stub `config/config.yaml` + `config/anomaly_rules.yaml` + `config/chart_of_accounts.csv` + `config/templates/_default.yaml`, `tests/conftest.py`. Implement `validate-config` CLI subcommand. Tests: pydantic schema rejects bad config, accepts good config.
-2. Create `CLAUDE.md` (per §9) reflecting the foundation.
-3. Merge `feat/foundation` to `main`, delete branch, update Status.
-4. Branch `feat/parsing`: implement `parsing/` modules with text-PDF + OCR support; add 1 text and 1 scanned sample PDF to `tests/fixtures/invoices/`.
+1. Branch `feat/parsing`: implement `src/doc_automation/parsing/{document.py, pdf.py, ocr.py, image.py}`.
+   - `ParsedDocument` dataclass (pages, words, word positions)
+   - `pdf.py`: detect text vs image PDF; extract with `pdfplumber`
+   - `ocr.py`: Tesseract wrapper via `pytesseract`
+   - `image.py`: rasterize image PDFs with `PyMuPDF` + `Pillow` preprocessing
+   - Add 1 text PDF + 1 scanned/image PDF to `tests/fixtures/invoices/`
+   - Tests: both sample files produce non-empty `ParsedDocument`
+2. Install `pdfplumber`, `pymupdf`, `pytesseract`, `Pillow` into `.venv`; ensure system Tesseract is installed (see README).
+3. Merge `feat/parsing` to `main`, delete branch, update Status + CLAUDE.md.
