@@ -41,6 +41,7 @@ def _cmd_validate_config(args: argparse.Namespace) -> int:
 def _cmd_run(args: argparse.Namespace) -> int:
     from doc_automation.audit import AuditLogger
     from doc_automation.config import ConfigError, load_all_configs, load_output_config
+    from doc_automation.dedup import DeduplicateDB
     from doc_automation.email_ingest import build_email_source
     from doc_automation.outbox import Outbox
     from doc_automation.output import build_adapter
@@ -69,6 +70,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     audit = AuditLogger(config.paths.audit_log)
     outbox = Outbox(config_dir.parent / "outbox.sqlite")
+    dedup = DeduplicateDB(config_dir.parent / "dedup.sqlite")
     templates_dir = config_dir / "templates"
 
     pipeline = Pipeline(
@@ -79,6 +81,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         email_source=email_source,
         audit_logger=audit,
         outbox=outbox,
+        dedup_db=dedup,
         templates_dir=templates_dir,
     )
 
@@ -88,12 +91,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if email_source:
         email_source.close()
     outbox.close()
+    dedup.close()
     return 0
 
 
 def _cmd_process_file(args: argparse.Namespace) -> int:
     from doc_automation.audit import AuditLogger
     from doc_automation.config import ConfigError, load_all_configs, load_output_config
+    from doc_automation.dedup import DeduplicateDB
     from doc_automation.output import build_adapter
     from doc_automation.pipeline import Pipeline
 
@@ -114,6 +119,7 @@ def _cmd_process_file(args: argparse.Namespace) -> int:
     ]
     output_adapter = build_adapter(output_cfg, columns)
     audit = AuditLogger(config.paths.audit_log)
+    dedup = DeduplicateDB(config_dir.parent / "dedup.sqlite")
     templates_dir = config_dir / "templates"
 
     pipeline = Pipeline(
@@ -122,6 +128,7 @@ def _cmd_process_file(args: argparse.Namespace) -> int:
         coa=coa,
         output_adapter=output_adapter,
         audit_logger=audit,
+        dedup_db=dedup,
         templates_dir=templates_dir,
     )
 
@@ -143,12 +150,14 @@ def _cmd_process_file(args: argparse.Namespace) -> int:
 
     try:
         output_adapter.write_rows([invoice])
+        dedup.record(invoice)
         print(f"Written to output.")
     except Exception as exc:
         print(f"Output write failed: {exc}", file=sys.stderr)
         return 1
     finally:
         output_adapter.close()
+        dedup.close()
 
     return 0
 
