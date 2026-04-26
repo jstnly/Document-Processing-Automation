@@ -25,14 +25,14 @@ Adapter pattern at the edges: every email source and every output destination im
 |---|---|
 | Config pydantic models + loaders | `src/doc_automation/config.py` |
 | CLI entry point | `src/doc_automation/cli.py` (+ `__main__.py`) |
-| Pipeline orchestrator | `src/doc_automation/pipeline.py` *(Phase 7, not yet built)* |
-| Audit log writer | `src/doc_automation/audit.py` *(Phase 7)* |
-| SQLite outbox | `src/doc_automation/outbox.py` *(Phase 7)* |
-| Email adapters | `src/doc_automation/email_ingest/` *(Phase 6)* |
-| PDF/OCR parsing | `src/doc_automation/parsing/` *(Phase 2)* |
-| Template-based extraction | `src/doc_automation/extraction/` *(Phase 3)* |
-| COA + anomaly validation | `src/doc_automation/validation/` *(Phase 4)* |
-| Output adapters | `src/doc_automation/output/` *(Phase 5)* |
+| Pipeline orchestrator | `src/doc_automation/pipeline.py` |
+| Audit log writer | `src/doc_automation/audit.py` |
+| SQLite outbox (retry queue) | `src/doc_automation/outbox.py` |
+| Email adapters | `src/doc_automation/email_ingest/` |
+| PDF/OCR parsing | `src/doc_automation/parsing/` |
+| Template-based extraction | `src/doc_automation/extraction/` |
+| COA + anomaly validation | `src/doc_automation/validation/` |
+| Output adapters | `src/doc_automation/output/` |
 | Main config (edit to configure) | `config/config.yaml` |
 | 11 anomaly rules | `config/anomaly_rules.yaml` |
 | Chart of accounts | `config/chart_of_accounts.csv` |
@@ -105,11 +105,15 @@ mypy src/
 
 ## Recent decisions (most recent first)
 
+- **2026-04-25** — `Outbox.__del__` closes SQLite to suppress Python 3.14 ResourceWarning without requiring callers to always call `close()`
+- **2026-04-25** — Audit log is append-only JSONL (not SQLite) — grep/tail/jq friendly; pipeline never needs to query it
+- **2026-04-25** — `.gitignore output/` changed to `/output/` — the original pattern matched `src/doc_automation/output/` silently preventing source files from being committed
+- **2026-04-25** — `IMAPSource._connect()` is lazy — lets tests inject a mock connection; avoids network at construction time
+- **2026-04-25** — Google Sheets adapter catches `gspread.exceptions.WorksheetNotFound` specifically — not a bare `except`, so auth failures aren't swallowed
 - **2026-04-25** — Used `hatchling` as build backend (over setuptools) — modern, zero-config for src layout
-- **2026-04-25** — `mailbox` is `Optional[MailboxConfig]` in `Config` — allows running `process-file` without configuring email, which is the correct Phase 1 scope
-- **2026-04-25** — `load_all_configs()` collects all validation errors before raising — better UX than stopping at first error; user sees all issues at once
+- **2026-04-25** — `mailbox` is `Optional[MailboxConfig]` in `Config` — allows running `process-file` without configuring email
+- **2026-04-25** — `load_all_configs()` collects all validation errors before raising — user sees all issues at once
 - **2026-04-25** — Used `argparse` (stdlib) for CLI over `click` — avoids an extra dep; subcommands are simple enough
-- **2026-04-25** — Stub implementations for unbuilt phases print to stderr and return 0 — allows CLI to be exercised without crashing
 
 ## Anti-patterns — DO NOT
 
