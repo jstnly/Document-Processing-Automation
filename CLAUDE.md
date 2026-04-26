@@ -103,9 +103,9 @@ mypy src/
 2. Implement the check in `src/doc_automation/validation/anomaly.py` keyed on `rule.name`
 3. Add positive + negative tests in `tests/test_anomaly.py`
 
-## v1 status (2026-04-25)
+## v1 status (2026-04-26)
 
-- **211 tests passing**, 2 skipped (OCR — require system Tesseract), all modules ≥85% coverage
+- **222 tests passing**, 2 skipped (OCR — require system Tesseract), `pipeline.py` 100% coverage
 - **`mypy --strict`** clean across all 32 source files
 - **`ruff check`** clean (61 issues fixed in Phase 8)
 - All 8 phases complete + post-Phase-7 hardening (dedup, IMAP retry, line item extraction)
@@ -113,6 +113,7 @@ mypy src/
 
 ## Recent decisions (most recent first)
 
+- **2026-04-26** — `Pipeline._process_attachment` outbox guard changed from `if self._outbox:` to `if self._outbox is not None:` — `Outbox.__len__` returns 0 when empty, so the old guard silently dropped invoices from retry queue when the queue was empty at the time of the write failure
 - **2026-04-25** — `_COL_SYNONYMS` checks `unit_price` before `quantity` — "Unit Price" contains "unit" matching `units?`; more-specific pattern must come first
 - **2026-04-25** — `extract_line_items` dispatched separately from `extract_field` — returns `list[LineItem]` not `str | None`; handled as special case in `apply_template()`
 - **2026-04-25** — `LineItem` imported via `TYPE_CHECKING` in `strategies.py` and locally at runtime inside `extract_line_items` — avoids `strategies → invoice` circular import
