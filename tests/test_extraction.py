@@ -8,15 +8,21 @@ from pathlib import Path
 import pytest
 
 from doc_automation.extraction.invoice import Invoice
-from doc_automation.extraction.strategies import extract_line_items
+from doc_automation.extraction.strategies import (
+    apply_anchor,
+    apply_regex,
+    extract_field,
+    extract_line_items,
+)
 from doc_automation.extraction.template import (
     FieldConfig,
+    VendorTemplate,
     load_all_templates,
     load_template,
     select_template,
 )
 from doc_automation.extraction.utils import parse_amount, parse_date, parse_re_flags, slugify
-from doc_automation.parsing.document import ParsedDocument
+from doc_automation.parsing.document import ParsedDocument, Word
 
 CONFIG_DIR = Path(__file__).parent.parent / "config"
 TEMPLATES_DIR = CONFIG_DIR / "templates"
@@ -380,3 +386,248 @@ def test_apply_template_populates_line_items(tmp_path: Path) -> None:
     # Line items are optional depending on whether pdfplumber detects a table;
     # the important thing is the field is populated (list, not None)
     assert isinstance(invoice.line_items, list)
+
+
+# ── apply_regex edge cases ─────────────────────────────────────────────────────
+
+
+def test_apply_regex_empty_pattern_returns_default() -> None:
+    cfg = FieldConfig(strategy="regex", pattern="", default="fallback")
+    assert apply_regex("any text", cfg) == "fallback"
+
+
+def test_apply_regex_invalid_pattern_returns_default() -> None:
+    cfg = FieldConfig(strategy="regex", pattern="[unclosed", default="oops")
+    assert apply_regex("any text", cfg) == "oops"
+
+
+# ── apply_anchor ──────────────────────────────────────────────────────────────
+
+
+def _make_word(text: str, x0: float, y0: float, x1: float, y1: float, page: int = 0) -> Word:
+    return Word(text=text, x0=x0, y0=y0, x1=x1, y1=y1, page_num=page)
+
+
+def _doc_with_words(words: list[Word]) -> ParsedDocument:
+    return ParsedDocument(
+        path=Path("fake.pdf"),
+        page_count=1,
+        page_texts=[" ".join(w.text for w in words)],
+        words=words,
+    )
+
+
+def test_apply_anchor_no_anchor_configured() -> None:
+    doc = _doc_with_words([])
+    cfg = FieldConfig(strategy="anchor", anchor="", default="x")
+    assert apply_anchor(doc, cfg) == "x"
+
+
+def test_apply_anchor_anchor_not_found() -> None:
+    doc = _doc_with_words([_make_word("Hello", 10, 10, 50, 20)])
+    cfg = FieldConfig(strategy="anchor", anchor="Total", direction="right", default="none")
+    assert apply_anchor(doc, cfg) == "none"
+
+
+def test_apply_anchor_finds_word_to_right() -> None:
+    words = [
+        _make_word("Total:", 50, 50, 100, 60),
+        _make_word("$1500.00", 110, 50, 190, 60),
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(strategy="anchor", anchor="Total:", direction="right", max_distance=200)
+    assert apply_anchor(doc, cfg) == "$1500.00"
+
+
+def test_apply_anchor_finds_word_below() -> None:
+    words = [
+        _make_word("TOTAL", 50, 50, 100, 60),
+        _make_word("999.00", 50, 70, 100, 80),
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(strategy="anchor", anchor="TOTAL", direction="below", max_distance=50)
+    assert apply_anchor(doc, cfg) == "999.00"
+
+
+def test_apply_anchor_respects_max_distance() -> None:
+    words = [
+        _make_word("Label:", 50, 50, 100, 60),
+        _make_word("FarAway", 600, 50, 700, 60),  # 500pt away
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(
+        strategy="anchor", anchor="Label:", direction="right", max_distance=100, default="miss"
+    )
+    assert apply_anchor(doc, cfg) == "miss"
+
+
+def test_apply_anchor_skips_other_pages() -> None:
+    words = [
+        _make_word("Anchor", 50, 50, 100, 60, page=0),
+        _make_word("WrongPage", 110, 50, 200, 60, page=1),  # different page
+    ]
+    doc = ParsedDocument(
+        path=Path("fake.pdf"),
+        page_count=2,
+        page_texts=["Anchor", "WrongPage"],
+        words=words,
+    )
+    cfg = FieldConfig(strategy="anchor", anchor="Anchor", direction="right", default="none")
+    assert apply_anchor(doc, cfg) == "none"
+
+
+def test_apply_anchor_no_candidates_returns_default() -> None:
+    words = [
+        _make_word("Total:", 50, 50, 100, 60),
+        _make_word("Left", 10, 50, 40, 60),  # to the left, but direction=right
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(
+        strategy="anchor", anchor="Total:", direction="right", max_distance=200, default="miss"
+    )
+    assert apply_anchor(doc, cfg) == "miss"
+
+
+def test_apply_anchor_skips_duplicate_of_anchor_word() -> None:
+    """Second occurrence of anchor text is skipped (line 64 — word.text == anchor_lower)."""
+    words = [
+        _make_word("TOTAL", 50, 50, 100, 60),   # anchor
+        _make_word("TOTAL", 110, 50, 160, 60),  # same text — should be skipped
+        _make_word("999", 170, 50, 210, 60),
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(strategy="anchor", anchor="TOTAL", direction="right", max_distance=300)
+    assert apply_anchor(doc, cfg) == "999"
+
+
+def test_apply_anchor_direction_left() -> None:
+    words = [
+        _make_word("$500", 10, 50, 60, 60),
+        _make_word("Total:", 80, 50, 130, 60),
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(strategy="anchor", anchor="Total:", direction="left", max_distance=200)
+    assert apply_anchor(doc, cfg) == "$500"
+
+
+def test_apply_anchor_direction_above() -> None:
+    words = [
+        _make_word("Header", 50, 30, 100, 40),
+        _make_word("Value", 50, 50, 100, 60),
+    ]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(strategy="anchor", anchor="Value", direction="above", max_distance=50)
+    assert apply_anchor(doc, cfg) == "Header"
+
+
+# ── extract_field dispatch ────────────────────────────────────────────────────
+
+
+def test_extract_field_anchor_dispatches() -> None:
+    words = [_make_word("Total:", 10, 10, 60, 20), _make_word("$99", 70, 10, 110, 20)]
+    doc = _doc_with_words(words)
+    cfg = FieldConfig(strategy="anchor", anchor="Total:", direction="right", max_distance=200)
+    assert extract_field(doc, "total", cfg) == "$99"
+
+
+def test_extract_field_table_returns_default() -> None:
+    doc = _doc_with_words([])
+    cfg = FieldConfig(strategy="table", default="d")
+    assert extract_field(doc, "line_items", cfg) == "d"
+
+
+def test_extract_field_unknown_strategy_returns_default() -> None:
+    doc = _doc_with_words([])
+    cfg = FieldConfig.model_construct(
+        strategy="nonexistent",  # type: ignore[arg-type]
+        default="fallback",
+        pattern="",
+        flags="",
+        anchor="",
+        direction="right",
+        max_distance=200.0,
+        header_pattern="",
+        columns=[],
+    )
+    assert extract_field(doc, "some_field", cfg) == "fallback"
+
+
+# ── extract_line_items branch coverage ────────────────────────────────────────
+
+
+def test_extract_line_items_skips_empty_cells() -> None:
+    """Empty cells in a mapped column produce None, not an error."""
+    table = [
+        ["Description", "Amount"],
+        ["Service", ""],       # empty amount cell → amount=None
+        ["Other Item", "$50.00"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table")  # auto-detect columns
+    items = extract_line_items(doc, cfg)
+    assert len(items) == 2
+    assert items[0].description == "Service"
+    assert items[0].amount is None     # empty cell → parse_amount("") == None
+    assert items[1].amount == Decimal("50.00")
+
+
+def test_extract_line_items_explicit_columns_ignores_extra_col() -> None:
+    """Column indices beyond cfg.columns length have no mapping → skipped (line 184)."""
+    table = [
+        ["Desc", "Qty", "Extra"],
+        ["Widget", "3", "ignore-me"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table", header_pattern="Desc", columns=["description", "quantity"])
+    items = extract_line_items(doc, cfg)
+    assert len(items) == 1
+    assert items[0].description == "Widget"
+    assert items[0].quantity == Decimal("3")
+    assert items[0].amount is None  # col 2 had no mapping
+
+
+# ── template.py error paths ───────────────────────────────────────────────────
+
+
+def test_matches_bad_regex_returns_false() -> None:
+    tmpl = VendorTemplate.model_construct(name="bad", match="[invalid", priority=0, fields={})
+    assert tmpl.matches("any text") is False
+
+
+def test_load_template_file_not_found() -> None:
+    with pytest.raises(FileNotFoundError, match="Template not found"):
+        load_template(Path("/nonexistent/template.yaml"))
+
+
+def test_load_template_non_dict_yaml(tmp_path: Path) -> None:
+    bad = tmp_path / "list.yaml"
+    bad.write_text("- item1\n- item2\n")
+    with pytest.raises(ValueError, match="expected a YAML mapping"):
+        load_template(bad)
+
+
+def test_load_template_bad_field_regex(tmp_path: Path) -> None:
+    bad = tmp_path / "bad_regex.yaml"
+    bad.write_text(
+        "match: '.*'\npriority: 0\nfields:\n  inv:\n    strategy: regex\n    pattern: '[bad'\n"
+    )
+    with pytest.raises(ValueError, match="invalid regex"):
+        load_template(bad)
+
+
+def test_load_all_templates_skips_invalid(tmp_path: Path) -> None:
+    """A bad template file is logged but doesn't abort loading of the rest."""
+    good = tmp_path / "good.yaml"
+    good.write_text("match: '.*'\npriority: 0\n")
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(": invalid: yaml: [")
+    templates = load_all_templates(tmp_path)
+    assert len(templates) == 1
+    assert templates[0].name == "good"
+
+
+def test_select_template_no_match_raises() -> None:
+    """select_template raises if no template matches (e.g., all have bad regexes)."""
+    tmpl = VendorTemplate.model_construct(name="never", match="[invalid", priority=0, fields={})
+    with pytest.raises(ValueError, match="No template matched"):
+        select_template("anything", [tmpl])
