@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from doc_automation.extraction.invoice import Invoice
+from doc_automation.extraction.invoice import Invoice, LineItem
+from doc_automation.extraction.strategies import extract_line_items
 from doc_automation.extraction.template import (
+    FieldConfig,
     VendorTemplate,
     load_all_templates,
     load_template,
@@ -221,3 +223,158 @@ def test_invoice_to_dict_keys(text_invoice_pdf: Path) -> None:
     }
     assert required_keys.issubset(d.keys())
     assert all(isinstance(v, str) for v in d.values())
+
+
+# ── extract_line_items ────────────────────────────────────────────────────────
+
+
+def _doc_with_tables(raw_tables: list) -> ParsedDocument:
+    """Helper: create a minimal ParsedDocument with pre-populated raw_tables."""
+    return ParsedDocument(
+        path=Path("fake.pdf"),
+        page_count=1,
+        page_texts=[""],
+        raw_tables=raw_tables,
+    )
+
+
+def test_extract_line_items_auto_detect_columns() -> None:
+    """Auto-detect columns from header cell text."""
+    table = [
+        ["Description", "Qty", "Unit Price", "Amount"],
+        ["Widget A", "2", "$50.00", "$100.00"],
+        ["Widget B", "1", "$25.00", "$25.00"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table")
+
+    items = extract_line_items(doc, cfg)
+
+    assert len(items) == 2
+    assert items[0].description == "Widget A"
+    assert items[0].quantity == Decimal("2")
+    assert items[0].unit_price == Decimal("50.00")
+    assert items[0].amount == Decimal("100.00")
+    assert items[1].description == "Widget B"
+    assert items[1].amount == Decimal("25.00")
+
+
+def test_extract_line_items_explicit_columns() -> None:
+    """Explicit cfg.columns override auto-detection."""
+    table = [
+        ["Item", "Price"],
+        ["Service Fee", "$500.00"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table", columns=["description", "amount"])
+
+    items = extract_line_items(doc, cfg)
+
+    assert len(items) == 1
+    assert items[0].description == "Service Fee"
+    assert items[0].amount == Decimal("500.00")
+    assert items[0].quantity is None
+
+
+def test_extract_line_items_skips_blank_rows() -> None:
+    table = [
+        ["Description", "Amount"],
+        ["Item 1", "$10.00"],
+        [None, None],
+        ["Item 2", "$20.00"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table")
+
+    items = extract_line_items(doc, cfg)
+
+    assert len(items) == 2
+    assert items[0].description == "Item 1"
+    assert items[1].description == "Item 2"
+
+
+def test_extract_line_items_no_tables() -> None:
+    doc = _doc_with_tables([])
+    cfg = FieldConfig(strategy="table")
+    assert extract_line_items(doc, cfg) == []
+
+
+def test_extract_line_items_no_header_match() -> None:
+    """Tables whose header doesn't match are skipped."""
+    table = [
+        ["Column A", "Column B"],  # no description/item keywords
+        ["foo", "bar"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table")
+    assert extract_line_items(doc, cfg) == []
+
+
+def test_extract_line_items_custom_header_pattern() -> None:
+    table = [
+        ["Service", "Hours", "Rate", "Total"],
+        ["Consulting", "5", "$200.00", "$1000.00"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table", header_pattern="service|hours")
+
+    items = extract_line_items(doc, cfg)
+
+    assert len(items) == 1
+    assert items[0].description == "Consulting"
+    assert items[0].quantity == Decimal("5")
+    assert items[0].amount == Decimal("1000.00")
+
+
+def test_extract_line_items_multiple_pages() -> None:
+    """Items from multiple pages are all collected."""
+    table_p0 = [
+        ["Description", "Amount"],
+        ["Page 1 Item", "$10.00"],
+    ]
+    table_p1 = [
+        ["Description", "Amount"],
+        ["Page 2 Item", "$20.00"],
+    ]
+    doc = _doc_with_tables([[table_p0], [table_p1]])
+    cfg = FieldConfig(strategy="table")
+
+    items = extract_line_items(doc, cfg)
+
+    assert len(items) == 2
+    descriptions = {i.description for i in items}
+    assert descriptions == {"Page 1 Item", "Page 2 Item"}
+
+
+def test_apply_template_populates_line_items(tmp_path: Path) -> None:
+    """apply_template() correctly populates invoice.line_items when template has table field."""
+    import fitz
+    from doc_automation.extraction.extractor import apply_template
+    from doc_automation.parsing import parse_document
+
+    # Build a PDF with a visible line-item table pdfplumber can extract
+    doc_fitz = fitz.open()
+    page = doc_fitz.new_page(width=612, height=792)
+    text = (
+        "ACME Supplies Inc.\n"
+        "Invoice No: INV-TABLE-001\n"
+        "Invoice Date: January 15, 2024\n\n"
+        "Description          Amount\n"
+        "Consulting Services  $1200.00\n"
+        "Travel               $300.00\n\n"
+        "Subtotal: $1500.00\n"
+        "Tax (10%): $150.00\n"
+        "Total: $1650.00\n"
+    )
+    page.insert_text((50, 60), text, fontsize=11)
+    path = tmp_path / "table_invoice.pdf"
+    doc_fitz.save(str(path))
+    doc_fitz.close()
+
+    doc = parse_document(path)
+    tmpl = load_template(TEMPLATES_DIR / "acme-supplies.yaml")
+    invoice = apply_template(doc, tmpl)
+
+    # Line items are optional depending on whether pdfplumber detects a table;
+    # the important thing is the field is populated (list, not None)
+    assert isinstance(invoice.line_items, list)

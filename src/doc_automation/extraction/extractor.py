@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from doc_automation.extraction.invoice import Invoice, LineItem
-from doc_automation.extraction.strategies import extract_field
+from doc_automation.extraction.invoice import Invoice
+from doc_automation.extraction.strategies import extract_field, extract_line_items
 from doc_automation.extraction.template import VendorTemplate, load_all_templates, select_template
 from doc_automation.extraction.utils import parse_amount, parse_date, slugify
 from doc_automation.parsing.document import ParsedDocument
@@ -32,8 +32,13 @@ def apply_template(doc: ParsedDocument, tmpl: VendorTemplate) -> Invoice:
     kept as a raw string (or None if not found).
     """
     raw: dict[str, str | None] = {}
+    line_items_cfg = None
+
     for field_name, cfg in tmpl.fields.items():
-        raw[field_name] = extract_field(doc, field_name, cfg)
+        if field_name == "line_items" and cfg.strategy == "table":
+            line_items_cfg = cfg
+        else:
+            raw[field_name] = extract_field(doc, field_name, cfg)
 
     vendor_name = raw.get("vendor_name")
 
@@ -49,11 +54,13 @@ def apply_template(doc: ParsedDocument, tmpl: VendorTemplate) -> Invoice:
         subtotal=parse_amount(raw.get("subtotal")),
         tax_amount=parse_amount(raw.get("tax_amount")),
         total=parse_amount(raw.get("total")),
+        line_items=extract_line_items(doc, line_items_cfg) if line_items_cfg else [],
     )
 
     logger.debug(
-        "Extracted %s: vendor=%r invoice_number=%r total=%s",
+        "Extracted %s: vendor=%r invoice_number=%r total=%s line_items=%d",
         doc.path.name, invoice.vendor_name, invoice.invoice_number, invoice.total,
+        len(invoice.line_items),
     )
     return invoice
 

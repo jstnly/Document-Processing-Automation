@@ -27,6 +27,9 @@ class ParsedDocument:
     page_texts: list[str] = field(default_factory=list)  # one entry per page
     words: list[Word] = field(default_factory=list)       # words with positions
     is_ocr: bool = False
+    # pdfplumber tables: outer list = pages, inner = list of tables per page,
+    # innermost = rows × cells (str | None).  Empty for image/OCR PDFs.
+    raw_tables: list[list[list[list[str | None]]]] = field(default_factory=list)
 
     @property
     def full_text(self) -> str:
