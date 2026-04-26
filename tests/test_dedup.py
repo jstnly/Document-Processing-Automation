@@ -98,6 +98,12 @@ class TestDeduplicateDB:
         db.close()
         del db  # __del__ should not raise after explicit close
 
+    def test_path_property_returns_db_path(self, tmp_path: Path) -> None:
+        """dedup.py:54 — path property returns the database file path."""
+        db_path = tmp_path / "dedup.sqlite"
+        db = DeduplicateDB(db_path)
+        assert db.path == db_path
+
 
 class TestDuplicateInvoiceRule:
     def test_no_dedup_db_never_fires(self) -> None:

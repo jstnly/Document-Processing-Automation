@@ -118,6 +118,17 @@ def test_parse_re_flags_unknown() -> None:
         parse_re_flags("FOOBAR")
 
 
+def test_parse_amount_only_currency_symbol() -> None:
+    """utils.py:18 — '$' alone strips to empty string → None."""
+    assert parse_amount("$") is None
+    assert parse_amount(" $ ") is None
+
+
+def test_parse_date_whitespace_only() -> None:
+    """utils.py:36 — whitespace-only string strips to '' → None."""
+    assert parse_date("   ") is None
+
+
 # ── Template loading ──────────────────────────────────────────────────────────
 
 
@@ -642,11 +653,18 @@ def test_load_template_pydantic_validation_error(tmp_path: Path) -> None:
 
 
 def test_extract_line_items_no_matching_header_logs_debug() -> None:
-    """Tables where no row matches header_pattern are silently skipped (line 142)."""
+    """Tables where no row matches header_pattern are silently skipped."""
     table = [
         ["Column A", "Column B"],
         ["value1", "value2"],
     ]
     doc = _doc_with_tables([[table]])
     cfg = FieldConfig(strategy="table", header_pattern="description|item")
+    assert extract_line_items(doc, cfg) == []
+
+
+def test_extract_line_items_skips_empty_table() -> None:
+    """strategies.py:142 — empty table list inside a page is skipped via 'continue'."""
+    doc = _doc_with_tables([[[]]])  # one page, one empty table
+    cfg = FieldConfig(strategy="table")
     assert extract_line_items(doc, cfg) == []
