@@ -121,6 +121,66 @@ def test_parse_document_rejects_unknown_type(tmp_path: Path) -> None:
         parse_document(bad)
 
 
+# ── image.py paths with mocked OCR (no Tesseract needed) ─────────────────────
+
+
+def test_parse_image_file_with_mocked_ocr(tmp_path: Path) -> None:
+    """image.py:69-74 — parse_image_file runs PIL + preprocess; ocr_image mocked."""
+    from unittest.mock import patch
+
+    from PIL import Image
+
+    from doc_automation.parsing.image import parse_image_file
+
+    img_path = tmp_path / "invoice.png"
+    Image.new("RGB", (100, 50), color=(255, 255, 255)).save(str(img_path))
+
+    with patch("doc_automation.parsing.image.ocr_image", return_value=([], "OCR text")):
+        doc = parse_image_file(img_path)
+
+    assert doc.is_ocr is True
+    assert doc.page_count == 1
+    assert doc.page_texts == ["OCR text"]
+
+
+def test_extract_image_pdf_with_mocked_ocr(tmp_path: Path) -> None:
+    """image.py:51-58 — extract_image_pdf rasterizes + calls ocr_image per page."""
+    from unittest.mock import patch
+
+    import fitz
+
+    from doc_automation.parsing.image import extract_image_pdf
+
+    pdf_path = tmp_path / "scan.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((50, 100), "Scanned invoice text")
+    doc.save(str(pdf_path))
+
+    with patch("doc_automation.parsing.image.ocr_image", return_value=([], "page text")):
+        result = extract_image_pdf(pdf_path)
+
+    assert result.is_ocr is True
+    assert result.page_count == 1
+    assert result.page_texts == ["page text"]
+
+
+def test_parse_document_routes_image_file(tmp_path: Path) -> None:
+    """parsing/__init__.py:32-33 — .png suffix dispatches to parse_image_file."""
+    from unittest.mock import patch
+
+    from PIL import Image
+
+    img_path = tmp_path / "scan.png"
+    Image.new("RGB", (100, 50)).save(str(img_path))
+
+    with patch("doc_automation.parsing.image.ocr_image", return_value=([], "scanned")):
+        doc = parse_document(img_path)
+
+    assert doc.is_ocr is True
+    assert "scanned" in doc.full_text
+
+
 # ── OCR path (skipped without Tesseract) ─────────────────────────────────────
 
 
