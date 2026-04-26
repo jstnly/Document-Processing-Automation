@@ -20,32 +20,25 @@ fields:
 
   invoice_date:
     strategy: regex
-    # Handles: 01/15/2024  |  01-15-2024  |  January 15, 2024  |  15 Jan 2024
-    pattern: >-
-      (?:Invoice\s+)?Date\s*[:\-]?\s*
-      (\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}
-      |\w+\s+\d{1,2},?\s+\d{4}
-      |\d{1,2}\s+\w+\s+\d{4})
-    flags: IGNORECASE|VERBOSE
+    pattern: '(?:Invoice\s+)?Date\s*[:\-]?\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\w+\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+\w+\s+\d{4})'
+    flags: IGNORECASE
 
   due_date:
     strategy: regex
-    pattern: >-
-      (?:Due\s+Date|Payment\s+Due|Pay\s+By)\s*[:\-]?\s*
-      (\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}
-      |\w+\s+\d{1,2},?\s+\d{4}
-      |\d{1,2}\s+\w+\s+\d{4})
-    flags: IGNORECASE|VERBOSE
+    pattern: '(?:Due\s+Date|Payment\s+Due|Pay\s+By)\s*[:\-]?\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\w+\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+\w+\s+\d{4})'
+    flags: IGNORECASE
 
   vendor_name:
     strategy: regex
     # First "company-looking" line near the top of the document
-    pattern: '^([A-Z][A-Za-z0-9&.,\'\-\s]{2,60}(?:LLC|Inc\.?|Corp\.?|Ltd\.?|Co\.?|LLP|PLLC)?)\s*$'
+    # Double-quoted so the backslash sequences are literal regex, not YAML escapes
+    pattern: "^([A-Z][A-Za-z0-9 &.,'-]{2,60}(?:LLC|Inc\\.?|Corp\\.?|Ltd\\.?|Co\\.?|LLP|PLLC)?)\\s*$"
     flags: MULTILINE
 
   total:
     strategy: regex
-    pattern: '(?:Total\s+(?:Due|Amount|USD)?|Amount\s+Due|Balance\s+Due)\s*[:\-]?\s*\$?\s*([\d,]+\.\d{2})'
+    # Negative lookbehind prevents matching "Subtotal:"
+    pattern: '(?<!Sub)(?:Total\s+(?:Due|Amount|USD)?|Amount\s+Due|Balance\s+Due)\s*[:\-]?\s*\$?\s*([\d,]+\.\d{2})'
     flags: IGNORECASE
 
   subtotal:
