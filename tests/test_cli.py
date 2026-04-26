@@ -141,6 +141,47 @@ def test_process_file_success(tmp_path: Path, capsys: pytest.CaptureFixture) -> 
     mock_adapter.close.assert_called_once()
 
 
+def test_process_file_writes_audit_log(tmp_path: Path) -> None:
+    """process-file logs a successful invoice to the audit JSONL."""
+    import json
+
+    import fitz
+
+    from doc_automation.cli import _cmd_process_file
+    from doc_automation.config import PathsConfig, load_all_configs
+
+    pdf_path = tmp_path / "inv.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((50, 100), "ACME Supplies Inc.\nInvoice No: CLI-002\nTotal: $250.00")
+    doc.save(str(pdf_path))
+
+    audit_path = tmp_path / "audit.jsonl"
+    config, rules, coa = load_all_configs(CONFIG_DIR)
+    config = config.model_copy(update={
+        "paths": PathsConfig(
+            working_dir=config.paths.working_dir,
+            quarantine_dir=config.paths.quarantine_dir,
+            audit_log=audit_path,
+        )
+    })
+
+    mock_adapter = MagicMock()
+    mock_adapter.write_rows.return_value = 1
+
+    with (
+        patch("doc_automation.output.build_adapter", return_value=mock_adapter),
+        patch("doc_automation.config.load_all_configs", return_value=(config, rules, coa)),
+    ):
+        rc = _cmd_process_file(_ns(path=str(pdf_path)))
+
+    assert rc == 0
+    assert audit_path.exists()
+    entry = json.loads(audit_path.read_text().strip())
+    assert entry["status"] == "ok"
+    assert entry["invoice_number"] == "CLI-002"
+
+
 def test_process_file_output_write_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:

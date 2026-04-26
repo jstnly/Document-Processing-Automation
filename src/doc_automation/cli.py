@@ -151,6 +151,7 @@ def _cmd_process_file(args: argparse.Namespace) -> int:
     try:
         output_adapter.write_rows([invoice])
         dedup.record(invoice)
+        audit.log_invoice(invoice, status="ok")
         print("Written to output.")
     except Exception as exc:
         print(f"Output write failed: {exc}", file=sys.stderr)
