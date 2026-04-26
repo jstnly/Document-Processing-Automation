@@ -513,7 +513,7 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-**v1 complete** (2026-04-26). 257 tests passing, `mypy --strict` clean, `ruff check` clean. 94% total coverage. `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py` all ≥98%.
+**v1 complete** (2026-04-26). 259 tests passing, `mypy --strict` clean, `ruff check` clean. 95% total coverage. `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py`, `outbox.py`, `sheets.py` all at 100%.
 
 Completed phases:
 
@@ -534,9 +534,10 @@ Completed phases:
 | Phase 8 | `chore/final-polish` | pydantic validation error + no-header table path coverage; 2 tests |
 | Post-v1 | `feat/pipeline-coverage` | Fix outbox guard bug (`if self._outbox:` → `is not None`); 11 pipeline tests; pipeline.py 100% coverage |
 | Post-v1 | `feat/coverage-sweep` | COA bad-regex, no-default-row, zero-subtotal tax, unknown rule, rule exception, outbox line items, corrupted drain, reschedule noop, dedup path prop, empty table, utils edge cases; 13 tests |
-| Post-v1 | `feat/cli-tests` | Full CLI test suite (22 tests) — every subcommand, error paths, resource close, mailbox branch; cli.py 98% |
+| Post-v1 | `feat/cli-tests` | Full CLI test suite (22 tests) — every subcommand, error paths, resource close, mailbox branch; cli.py 100% |
+| Post-v1 | `feat/final-coverage` | outbox `__del__` exception path, sheets `_get_client` success; outbox.py + sheets.py 100% |
 
-**Test totals**: 257 passing, 2 skipped (OCR — system Tesseract required). 94% total coverage. `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py` all ≥98%.
+**Test totals**: 259 passing, 2 skipped (OCR — system Tesseract required). 95% total coverage. `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py`, `outbox.py`, `sheets.py` all at 100%.
 
 ## Decisions
 

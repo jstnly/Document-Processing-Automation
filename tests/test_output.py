@@ -278,6 +278,23 @@ class TestGoogleSheetsAdapter:
         assert call_args[0] == "ZZZ Corp"
         assert call_args[1] == "Z-99"
 
+    def test_get_client_builds_gspread_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """sheets.py:46-50 — _get_client loads creds and returns a gspread client."""
+        monkeypatch.setenv("GOOGLE_SHEETS_SERVICE_ACCOUNT", "/fake/creds.json")
+
+        mock_creds = MagicMock()
+        mock_client = MagicMock()
+
+        with (
+            patch("google.oauth2.service_account.Credentials.from_service_account_file",
+                  return_value=mock_creds),
+            patch("gspread.authorize", return_value=mock_client),
+        ):
+            adapter = self._make_adapter()
+            result = adapter._get_client()
+
+        assert result is mock_client
+
 
 # ── build_adapter factory ─────────────────────────────────────────────────────
 
