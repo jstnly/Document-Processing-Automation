@@ -181,6 +181,135 @@ def test_parse_document_routes_image_file(tmp_path: Path) -> None:
     assert "scanned" in doc.full_text
 
 
+# ── ocr.py unit tests (no Tesseract: mock pytesseract + test pure helpers) ────
+
+
+def test_words_to_page_text_empty() -> None:
+    """ocr.py:33-34 — empty word list returns empty string."""
+    from doc_automation.parsing.ocr import _words_to_page_text
+
+    assert _words_to_page_text([]) == ""
+
+
+def test_words_to_page_text_single_line() -> None:
+    """ocr.py:36-54 — words on the same y-band joined with spaces."""
+    from doc_automation.parsing.document import Word
+    from doc_automation.parsing.ocr import _words_to_page_text
+
+    words = [
+        Word("Hello", 0.0, 10.0, 40.0, 20.0, 0),
+        Word("World", 50.0, 10.0, 90.0, 20.0, 0),
+    ]
+    assert _words_to_page_text(words) == "Hello World"
+
+
+def test_words_to_page_text_multiple_lines() -> None:
+    """ocr.py:43-53 — words on different y-bands become separate lines."""
+    from doc_automation.parsing.document import Word
+    from doc_automation.parsing.ocr import _words_to_page_text
+
+    words = [
+        Word("Line1", 0.0, 10.0, 40.0, 20.0, 0),
+        Word("Line2", 0.0, 50.0, 40.0, 60.0, 0),
+    ]
+    result = _words_to_page_text(words)
+    assert "Line1" in result
+    assert "Line2" in result
+    assert result.index("Line1") < result.index("Line2")
+
+
+def test_ocr_image_with_mocked_pytesseract() -> None:
+    """ocr.py:72-110 — ocr_image parses pytesseract output dict into Words."""
+    from unittest.mock import MagicMock, patch
+
+    from doc_automation.parsing.ocr import ocr_image
+
+    mock_image = MagicMock()
+    fake_data = {
+        "text":   ["Invoice", "Total", ""],
+        "conf":   [95,        88,       -1],
+        "left":   [10,        10,        0],
+        "top":    [10,        30,        0],
+        "width":  [60,        40,        0],
+        "height": [12,        12,        0],
+    }
+
+    with (
+        patch("doc_automation.parsing.ocr.TESSERACT_AVAILABLE", True),
+        patch("pytesseract.image_to_data", return_value=fake_data),
+    ):
+        words, page_text = ocr_image(mock_image, page_num=0)
+
+    assert len(words) == 2
+    assert words[0].text == "Invoice"
+    assert words[1].text == "Total"
+    assert "Invoice" in page_text
+
+
+def test_ocr_image_filters_low_confidence() -> None:
+    """ocr.py:87-88 — tokens below confidence threshold are dropped."""
+    from unittest.mock import MagicMock, patch
+
+    from doc_automation.parsing.ocr import ocr_image
+
+    fake_data = {
+        "text":   ["Fuzzy", "Clear"],
+        "conf":   [10,      90],      # 10 < 30 threshold
+        "left":   [0,       0],
+        "top":    [0,       20],
+        "width":  [40,      40],
+        "height": [12,      12],
+    }
+
+    with (
+        patch("doc_automation.parsing.ocr.TESSERACT_AVAILABLE", True),
+        patch("pytesseract.image_to_data", return_value=fake_data),
+    ):
+        words, _ = ocr_image(MagicMock(), page_num=0)
+
+    assert len(words) == 1
+    assert words[0].text == "Clear"
+
+
+def test_ocr_image_handles_non_numeric_confidence() -> None:
+    """ocr.py:85-86 — non-numeric conf value defaults to 0 (below threshold, skipped)."""
+    from unittest.mock import MagicMock, patch
+
+    from doc_automation.parsing.ocr import ocr_image
+
+    fake_data = {
+        "text":   ["Broken", "Good"],
+        "conf":   ["N/A",    95],      # "N/A" triggers the except branch → conf=0
+        "left":   [0,        0],
+        "top":    [0,        20],
+        "width":  [40,       40],
+        "height": [12,       12],
+    }
+
+    with (
+        patch("doc_automation.parsing.ocr.TESSERACT_AVAILABLE", True),
+        patch("pytesseract.image_to_data", return_value=fake_data),
+    ):
+        words, _ = ocr_image(MagicMock(), page_num=0)
+
+    # "Broken" had conf=0 after except, so it's filtered; only "Good" survives
+    assert len(words) == 1
+    assert words[0].text == "Good"
+
+
+def test_ocr_image_raises_without_tesseract() -> None:
+    """ocr.py:64-70 — raises RuntimeError when Tesseract is not available."""
+    from unittest.mock import MagicMock, patch
+
+    from doc_automation.parsing.ocr import ocr_image
+
+    with (
+        patch("doc_automation.parsing.ocr.TESSERACT_AVAILABLE", False),
+        pytest.raises(RuntimeError, match="Tesseract is not installed"),
+    ):
+        ocr_image(MagicMock())
+
+
 # ── OCR path (skipped without Tesseract) ─────────────────────────────────────
 
 
