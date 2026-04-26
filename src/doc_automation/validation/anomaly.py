@@ -9,13 +9,15 @@ without changing code.
 from __future__ import annotations
 
 import logging
-import sqlite3
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from doc_automation.config import AnomalyRule, AnomalyRulesConfig, DefaultsConfig
 from doc_automation.extraction.invoice import Invoice
+
+if TYPE_CHECKING:
+    from doc_automation.dedup import DeduplicateDB
 
 logger = logging.getLogger(__name__)
 
@@ -23,29 +25,15 @@ logger = logging.getLogger(__name__)
 # ── Individual rule checks (pure functions) ───────────────────────────────────
 
 
-def _check_duplicate_invoice(invoice: Invoice, audit_db: Path | None) -> bool:
-    """True if (vendor_id, invoice_number) seen in audit log within last 365 days."""
-    if not audit_db or not audit_db.exists():
+def _check_duplicate_invoice(
+    invoice: Invoice, dedup_db: "DeduplicateDB | None"
+) -> bool:
+    """True if (vendor_id, invoice_number) seen within the last 365 days."""
+    if dedup_db is None:
         return False
     if not invoice.vendor_id or not invoice.invoice_number:
         return False
-    try:
-        con = sqlite3.connect(str(audit_db))
-        cur = con.execute(
-            """
-            SELECT 1 FROM audit
-            WHERE vendor_id = ? AND invoice_number = ?
-              AND processed_at > datetime('now', '-365 days')
-            LIMIT 1
-            """,
-            (invoice.vendor_id, invoice.invoice_number),
-        )
-        found = cur.fetchone() is not None
-        con.close()
-        return found
-    except sqlite3.Error as exc:
-        logger.warning("Could not check duplicate invoice: %s", exc)
-        return False
+    return dedup_db.is_duplicate(invoice.vendor_id, invoice.invoice_number)
 
 
 def _check_amount_threshold(invoice: Invoice, rule: AnomalyRule) -> bool:
@@ -134,7 +122,7 @@ def run_anomaly_checks(
     invoice: Invoice,
     rules_config: AnomalyRulesConfig,
     defaults: DefaultsConfig,
-    audit_db: Path | None = None,
+    dedup_db: "DeduplicateDB | None" = None,
 ) -> list[str]:
     """
     Run all enabled anomaly rules against the invoice.
@@ -154,7 +142,7 @@ def run_anomaly_checks(
         fired = False
         try:
             if name == "duplicate_invoice":
-                fired = _check_duplicate_invoice(invoice, audit_db)
+                fired = _check_duplicate_invoice(invoice, dedup_db)
             elif name == "amount_threshold":
                 fired = _check_amount_threshold(invoice, rule)
             elif name == "future_date":

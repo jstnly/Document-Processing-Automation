@@ -13,6 +13,7 @@ import imaplib
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from pathlib import Path
@@ -23,6 +24,33 @@ from doc_automation.email_ingest.base import EmailMessage, EmailSource
 logger = logging.getLogger(__name__)
 
 _SAFE_FILENAME = re.compile(r'[^\w\-.]')
+
+# Retry parameters for transient network errors (connect + fetch)
+_RETRY_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 1.0  # seconds; doubled on each attempt (1 → 2 → 4)
+
+
+def _with_retry(fn, *args, attempts: int = _RETRY_ATTEMPTS, **kwargs):
+    """Call fn(*args, **kwargs), retrying on IMAP / network errors."""
+    delay = _RETRY_BASE_DELAY
+    last_exc: Exception = RuntimeError("no attempts made")
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn(*args, **kwargs)
+        except (imaplib.IMAP4.error, OSError, TimeoutError) as exc:
+            last_exc = exc
+            if attempt < attempts:
+                logger.warning(
+                    "IMAP transient error (attempt %d/%d): %s — retrying in %.0fs",
+                    attempt, attempts, exc, delay,
+                )
+                time.sleep(delay)
+                delay *= 2
+            else:
+                logger.error(
+                    "IMAP failed after %d attempts: %s", attempts, exc
+                )
+    raise last_exc
 
 
 def _decode_str(value: str | None) -> str:
@@ -56,16 +84,20 @@ class IMAPSource(EmailSource):
                 f"IMAP credentials not set: {self._config.username_env!r} "
                 f"and {self._config.password_env!r} env vars are required"
             )
-        conn = imaplib.IMAP4_SSL(self._config.host, self._config.port)
-        conn.login(username, password)
-        self._conn = conn
+
+        def _do_connect() -> imaplib.IMAP4_SSL:
+            c = imaplib.IMAP4_SSL(self._config.host, self._config.port)
+            c.login(username, password)
+            return c
+
+        self._conn = _with_retry(_do_connect)
         logger.debug("IMAP connected to %s as %s", self._config.host, username)
-        return conn
+        return self._conn
 
     def fetch_new(self, working_dir: Path) -> list[EmailMessage]:
         working_dir.mkdir(parents=True, exist_ok=True)
         conn = self._connect()
-        conn.select(self._config.inbox_folder)
+        _with_retry(conn.select, self._config.inbox_folder)
 
         _status, data = conn.search(None, "UNSEEN")
         uids = (data[0] or b"").split()
@@ -83,9 +115,9 @@ class IMAPSource(EmailSource):
         for uid_bytes in uids:
             uid = uid_bytes.decode()
             try:
-                msg = self._fetch_message(conn, uid)
+                msg = _with_retry(self._fetch_message, conn, uid)
             except Exception:
-                logger.exception("IMAP: failed to fetch UID %s", uid)
+                logger.exception("IMAP: failed to fetch UID %s after retries", uid)
                 continue
 
             subject = _decode_str(msg.get("Subject"))

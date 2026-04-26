@@ -21,6 +21,7 @@ from pathlib import Path
 
 from doc_automation.audit import AuditLogger
 from doc_automation.config import AnomalyRulesConfig, COARow, Config
+from doc_automation.dedup import DeduplicateDB
 from doc_automation.email_ingest.base import EmailSource
 from doc_automation.extraction.extractor import extract_file
 from doc_automation.extraction.invoice import Invoice
@@ -61,6 +62,7 @@ class Pipeline:
         email_source: EmailSource | None = None,
         audit_logger: AuditLogger | None = None,
         outbox: Outbox | None = None,
+        dedup_db: DeduplicateDB | None = None,
         templates_dir: Path | None = None,
     ) -> None:
         self._config = config
@@ -70,6 +72,7 @@ class Pipeline:
         self._email = email_source
         self._audit = audit_logger
         self._outbox = outbox
+        self._dedup = dedup_db
         self._templates_dir = (
             templates_dir or Path("./config/templates")
         )
@@ -102,6 +105,8 @@ class Pipeline:
                 self._outbox.mark_done(entry_id)
                 result.outbox_retried += 1
                 result.output_rows += n
+                if self._dedup:
+                    self._dedup.record(invoice)
                 if self._audit:
                     self._audit.log_invoice(invoice, status="ok")
             except Exception as exc:
@@ -154,6 +159,8 @@ class Pipeline:
         try:
             n = self._output.write_rows([invoice])
             result.output_rows += n
+            if self._dedup:
+                self._dedup.record(invoice)
             if self._audit:
                 self._audit.log_invoice(invoice, status="ok")
         except Exception as exc:
@@ -183,7 +190,9 @@ class Pipeline:
         invoice.source_email_id = email_id
         invoice.attachment_sha256 = _sha256(path)
         match_gl_code(invoice, self._coa)
-        new_flags = run_anomaly_checks(invoice, self._rules, self._config.defaults)
+        new_flags = run_anomaly_checks(
+            invoice, self._rules, self._config.defaults, dedup_db=self._dedup
+        )
         invoice.anomaly_flags.extend(f for f in new_flags if f not in invoice.anomaly_flags)
         return invoice
 
@@ -218,7 +227,9 @@ class Pipeline:
         invoice.attachment_sha256 = _sha256(path)
         invoice.processed_at = datetime.now(tz=timezone.utc)
         match_gl_code(invoice, self._coa)
-        new_flags = run_anomaly_checks(invoice, self._rules, self._config.defaults)
+        new_flags = run_anomaly_checks(
+            invoice, self._rules, self._config.defaults, dedup_db=self._dedup
+        )
         invoice.anomaly_flags.extend(f for f in new_flags if f not in invoice.anomaly_flags)
         return invoice
 
