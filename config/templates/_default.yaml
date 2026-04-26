@@ -1,0 +1,64 @@
+# Default (fallback) vendor template.
+# Applied when no vendor-specific template matches.
+# Triggers the 'unknown_vendor' anomaly flag.
+#
+# To add a vendor-specific template:
+#   1. Copy this file to config/templates/<vendor_slug>.yaml
+#   2. Set 'match' to a regex that uniquely identifies that vendor's invoices
+#      (matched against the full extracted text, case-insensitive)
+#   3. Refine field patterns for that vendor's layout
+#   4. Set a priority > 0 (higher = checked first)
+
+match: '.*'      # always matches — lowest priority
+priority: 0
+
+fields:
+  invoice_number:
+    strategy: regex
+    pattern: 'Invoice\s*(?:No\.?|Number|Num\.?|#|ID)?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-/_]{2,30})'
+    flags: IGNORECASE
+
+  invoice_date:
+    strategy: regex
+    # Handles: 01/15/2024  |  01-15-2024  |  January 15, 2024  |  15 Jan 2024
+    pattern: >-
+      (?:Invoice\s+)?Date\s*[:\-]?\s*
+      (\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}
+      |\w+\s+\d{1,2},?\s+\d{4}
+      |\d{1,2}\s+\w+\s+\d{4})
+    flags: IGNORECASE|VERBOSE
+
+  due_date:
+    strategy: regex
+    pattern: >-
+      (?:Due\s+Date|Payment\s+Due|Pay\s+By)\s*[:\-]?\s*
+      (\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}
+      |\w+\s+\d{1,2},?\s+\d{4}
+      |\d{1,2}\s+\w+\s+\d{4})
+    flags: IGNORECASE|VERBOSE
+
+  vendor_name:
+    strategy: regex
+    # First "company-looking" line near the top of the document
+    pattern: '^([A-Z][A-Za-z0-9&.,\'\-\s]{2,60}(?:LLC|Inc\.?|Corp\.?|Ltd\.?|Co\.?|LLP|PLLC)?)\s*$'
+    flags: MULTILINE
+
+  total:
+    strategy: regex
+    pattern: '(?:Total\s+(?:Due|Amount|USD)?|Amount\s+Due|Balance\s+Due)\s*[:\-]?\s*\$?\s*([\d,]+\.\d{2})'
+    flags: IGNORECASE
+
+  subtotal:
+    strategy: regex
+    pattern: 'Sub\s*[Tt]otal\s*[:\-]?\s*\$?\s*([\d,]+\.\d{2})'
+    flags: IGNORECASE
+
+  tax_amount:
+    strategy: regex
+    pattern: '(?:Tax|VAT|GST|HST|Sales\s+Tax)\s*(?:\(\d+\.?\d*%\))?\s*[:\-]?\s*\$?\s*([\d,]+\.\d{2})'
+    flags: IGNORECASE
+
+  currency:
+    strategy: regex
+    pattern: '\b(USD|EUR|GBP|CAD|AUD|NZD|JPY|CHF|MXN)\b'
+    default: 'USD'

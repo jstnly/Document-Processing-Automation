@@ -1,0 +1,38 @@
+# Output adapter configuration.
+# adapter: csv | excel | google_sheets
+
+adapter: csv
+
+csv:
+  file: ./output/invoices.csv
+  append: true          # false = overwrite on each run
+
+# excel:
+#   file: ./output/invoices.xlsx
+#   sheet_name: Invoices
+#   append: true
+
+# google_sheets:
+#   spreadsheet_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+#   sheet_name: Invoices
+#   credentials_env: GOOGLE_SHEETS_SERVICE_ACCOUNT
+
+# Columns to write, in order.
+# Available fields: vendor_name, vendor_id, invoice_number, invoice_date,
+#   due_date, subtotal, tax_amount, total, currency, gl_code,
+#   anomaly_flags, template_used, source_file, source_email_id,
+#   attachment_sha256, processed_at
+columns:
+  - vendor_name
+  - invoice_number
+  - invoice_date
+  - due_date
+  - subtotal
+  - tax_amount
+  - total
+  - currency
+  - gl_code
+  - anomaly_flags
+  - template_used
+  - source_file
+  - processed_at

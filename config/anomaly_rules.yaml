@@ -1,0 +1,75 @@
+# Anomaly detection rules.
+# severity: info | warn | block
+#   info  — logged, written to output with flag
+#   warn  — logged, written to output with flag
+#   block — invoice quarantined, NOT written to output
+#
+# Add, remove, or adjust params here without touching code.
+
+rules:
+  - name: duplicate_invoice
+    severity: block
+    description: >
+      Same (vendor_id, invoice_number) combination already seen in the
+      audit log within the last 365 days.
+
+  - name: amount_threshold
+    severity: warn
+    description: Invoice total exceeds the configured threshold.
+    params:
+      threshold: 10000  # overrides defaults.amount_threshold when set
+
+  - name: future_date
+    severity: warn
+    description: Invoice date is in the future.
+
+  - name: stale_date
+    severity: warn
+    description: Invoice date is older than max_age_days.
+    params:
+      max_age_days: 180
+
+  - name: math_mismatch_subtotal
+    severity: warn
+    description: >
+      Sum of line-item amounts does not equal the subtotal field
+      (within tolerance).
+    params:
+      tolerance: 0.02
+
+  - name: math_mismatch_total
+    severity: warn
+    description: >
+      subtotal + tax_amount does not equal the total field
+      (within tolerance).
+    params:
+      tolerance: 0.02
+
+  - name: tax_rate_out_of_range
+    severity: warn
+    description: >
+      Effective tax rate (tax_amount / subtotal) is outside the
+      expected range.
+    params:
+      min_rate: 0.0
+      max_rate: 0.25
+
+  - name: missing_required_field
+    severity: warn
+    description: One or more required invoice fields are empty or absent.
+
+  - name: unknown_vendor
+    severity: info
+    description: >
+      No vendor-specific template matched; the default template was used.
+      Review and consider adding a dedicated template.
+
+  - name: unknown_gl_code
+    severity: info
+    description: >
+      No chart-of-accounts entry matched this vendor or line items.
+      The uncategorized GL code was applied.
+
+  - name: currency_mismatch
+    severity: warn
+    description: Invoice currency differs from defaults.currency.

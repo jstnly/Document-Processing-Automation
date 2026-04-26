@@ -1,0 +1,34 @@
+# Main configuration — edit this file to configure your installation.
+# See prompt.md §7 for full schema documentation.
+# Secrets (passwords, API tokens) go in .env, not here.
+
+# mailbox:           # uncomment and fill in to enable email ingestion
+#   adapter: imap    # imap | gmail | outlook
+#   host: imap.example.com
+#   port: 993
+#   username_env: MAILBOX_USER
+#   password_env: MAILBOX_PASS
+#   inbox_folder: INBOX
+#   processed_label: doc-automation/processed
+#   filters:
+#     sender_allowlist:
+#       - '.*@trusted-vendor\.com'
+#     subject_patterns:
+#       - '(?i)invoice'
+#     attachment_types:
+#       - application/pdf
+#       - image/png
+#       - image/jpeg
+#       - image/tiff
+
+defaults:
+  currency: USD
+  amount_threshold: 10000
+
+paths:
+  working_dir: ./working
+  quarantine_dir: ./quarantine
+  audit_log: ./logs/audit.jsonl
+
+output:
+  config_file: ./config/output.yaml
