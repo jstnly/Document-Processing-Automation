@@ -105,8 +105,8 @@ mypy src/
 
 ## v1 status (2026-04-26)
 
-- **259 tests passing**, 2 skipped (OCR — require system Tesseract), 95% total coverage
-- `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py`, `outbox.py`, `sheets.py` all at 100%
+- **262 tests passing**, 2 skipped (OCR — require system Tesseract), 95% total coverage
+- `pipeline.py`, `anomaly.py`, `coa.py`, `cli.py`, `outbox.py`, `sheets.py`, `pdf.py` all at 100%
 - **`mypy --strict`** clean across all 32 source files
 - **`ruff check`** clean (61 issues fixed in Phase 8)
 - All 8 phases complete + post-Phase-7 hardening (dedup, IMAP retry, line item extraction)
@@ -114,6 +114,8 @@ mypy src/
 
 ## Recent decisions (most recent first)
 
+- **2026-04-26** — `pipeline.py` both `_process_attachment` and `_extract` discarded the return value of `match_gl_code()` — `invoice.gl_code` was never set; all output CSV rows had an empty GL code field. Fixed by assigning `invoice.gl_code = match_gl_code(...)`. Regression tests added to `test_e2e.py`.
+- **2026-04-26** — `_cmd_process_file` in cli.py never called `audit.log_invoice()` — audit logger was created and passed to Pipeline but output writes happen in the CLI handler directly, so the log entry was silently skipped. Fixed by adding `audit.log_invoice(invoice, status="ok")` in the success path.
 - **2026-04-26** — `Pipeline._process_attachment` outbox guard changed from `if self._outbox:` to `if self._outbox is not None:` — `Outbox.__len__` returns 0 when empty, so the old guard silently dropped invoices from retry queue when the queue was empty at the time of the write failure
 - **2026-04-25** — `_COL_SYNONYMS` checks `unit_price` before `quantity` — "Unit Price" contains "unit" matching `units?`; more-specific pattern must come first
 - **2026-04-25** — `extract_line_items` dispatched separately from `extract_field` — returns `list[LineItem]` not `str | None`; handled as special case in `apply_template()`

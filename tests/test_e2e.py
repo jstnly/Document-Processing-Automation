@@ -86,6 +86,22 @@ class TestProcessFileSampleInvoice:
         not SAMPLE_INVOICE.exists(),
         reason="samples/invoices/acme_sample.pdf not present",
     )
+    def test_gl_code_assigned(self, pipeline_with_csv):
+        """Regression: gl_code must be set on the invoice after process_file.
+
+        Previously pipeline.py discarded the return value of match_gl_code(),
+        leaving invoice.gl_code as None for every processed invoice.
+        """
+        pl, _, _ = pipeline_with_csv
+        invoice = pl.process_file(SAMPLE_INVOICE)
+        assert invoice.gl_code is not None
+        assert invoice.gl_code != ""
+        assert invoice.gl_code == "6010"  # ACME → Office Supplies
+
+    @pytest.mark.skipif(
+        not SAMPLE_INVOICE.exists(),
+        reason="samples/invoices/acme_sample.pdf not present",
+    )
     def test_anomaly_flags_populated(self, pipeline_with_csv):
         """Regression: anomaly flags must be present after process_file (not empty)."""
         pl, _, _ = pipeline_with_csv
@@ -110,6 +126,7 @@ class TestProcessFileSampleInvoice:
         row = next(r for r in rows if r["invoice_number"] == "INV-2024-0042")
         assert row["total"] == "1650.00"
         assert row["template_used"] == "acme-supplies"
+        assert row["gl_code"] == "6010"  # regression: was "" before gl_code fix
 
 
 class TestAnomalyFlagsWiredInPipeline:
