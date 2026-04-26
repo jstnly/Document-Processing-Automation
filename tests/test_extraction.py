@@ -7,11 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from doc_automation.extraction.invoice import Invoice, LineItem
+from doc_automation.extraction.invoice import Invoice
 from doc_automation.extraction.strategies import extract_line_items
 from doc_automation.extraction.template import (
     FieldConfig,
-    VendorTemplate,
     load_all_templates,
     load_template,
     select_template,
@@ -190,12 +189,14 @@ def test_extract_document_acme(text_invoice_pdf: Path) -> None:
 
 def test_extract_document_unknown_vendor(tmp_path: Path) -> None:
     import fitz
+
     from doc_automation.extraction.extractor import extract_document
     from doc_automation.parsing import parse_document
 
     doc_fitz = fitz.open()
     page = doc_fitz.new_page()
-    page.insert_text((50, 60), "Generic Vendor Co.\nInvoice No: GV-999\nTotal: $200.00", fontsize=11)
+    text = "Generic Vendor Co.\nInvoice No: GV-999\nTotal: $200.00"
+    page.insert_text((50, 60), text, fontsize=11)
     path = tmp_path / "generic.pdf"
     doc_fitz.save(str(path))
     doc_fitz.close()
@@ -349,6 +350,7 @@ def test_extract_line_items_multiple_pages() -> None:
 def test_apply_template_populates_line_items(tmp_path: Path) -> None:
     """apply_template() correctly populates invoice.line_items when template has table field."""
     import fitz
+
     from doc_automation.extraction.extractor import apply_template
     from doc_automation.parsing import parse_document
 

@@ -16,10 +16,9 @@ from pathlib import Path
 import fitz
 import pytest
 
-from doc_automation.config import load_all_configs, load_output_config
 from doc_automation.audit import AuditLogger
+from doc_automation.config import load_all_configs
 from doc_automation.outbox import Outbox
-from doc_automation.output import build_adapter
 from doc_automation.pipeline import Pipeline
 
 # Config dir relative to the project root (two levels up from tests/)
@@ -102,7 +101,6 @@ class TestProcessFileSampleInvoice:
         pl, csv_path, _ = pipeline_with_csv
         invoice = pl.process_file(SAMPLE_INVOICE)
 
-        from doc_automation.output.csv_writer import CSVAdapter
         # Write manually via process_file result
         pl._output.write_rows([invoice])
 
@@ -190,6 +188,7 @@ class TestOutboxIntegration:
     def test_outbox_retried_on_run(self, pipeline_with_csv, tmp_path):
         pl, _, work_dir = pipeline_with_csv
         from decimal import Decimal
+
         from doc_automation.extraction.invoice import Invoice
 
         inv = Invoice(source_file=Path("retry.pdf"), template_used="_default")

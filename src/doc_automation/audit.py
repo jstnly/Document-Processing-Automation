@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,7 @@ class AuditLogger:
         status values: 'ok', 'blocked', 'quarantine', 'output_error'
         """
         entry: dict[str, Any] = {
-            "ts": datetime.now(tz=timezone.utc).isoformat(),
+            "ts": datetime.now(tz=UTC).isoformat(),
             "status": status,
             "invoice_number": invoice.invoice_number,
             "vendor_name": invoice.vendor_name,
@@ -53,7 +53,7 @@ class AuditLogger:
     def log_parse_error(self, source_file: Path, error: str) -> None:
         """Record a file that could not be parsed at all."""
         entry: dict[str, Any] = {
-            "ts": datetime.now(tz=timezone.utc).isoformat(),
+            "ts": datetime.now(tz=UTC).isoformat(),
             "status": "parse_error",
             "source_file": str(source_file.name),
             "error": error,

@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from doc_automation.audit import AuditLogger
 from doc_automation.config import (
@@ -22,7 +20,6 @@ from doc_automation.config import (
 from doc_automation.extraction.invoice import Invoice
 from doc_automation.outbox import Outbox
 from doc_automation.pipeline import Pipeline, PipelineResult
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -262,7 +259,7 @@ class TestPipeline:
 
     def test_outbox_reschedules_on_output_failure(self, tmp_path: Path) -> None:
         mock_output = MagicMock()
-        mock_output.write_rows.side_effect = IOError("output unreachable")
+        mock_output.write_rows.side_effect = OSError("output unreachable")
         outbox = Outbox(tmp_path / "outbox.sqlite")
         outbox.put(make_invoice(), "original error")
 
@@ -285,13 +282,14 @@ class TestPipeline:
         pipeline.run()
 
         entries = [
-            json.loads(l)
-            for l in audit_path.read_text(encoding="utf-8").strip().splitlines()
+            json.loads(ln)
+            for ln in audit_path.read_text(encoding="utf-8").strip().splitlines()
         ]
         assert any(e["status"] == "ok" for e in entries)
 
     def test_email_source_attachments_processed(self, tmp_path: Path) -> None:
         import fitz
+
         from doc_automation.email_ingest.base import EmailMessage
 
         pdf_path = tmp_path / "working" / "attach.pdf"
@@ -307,7 +305,7 @@ class TestPipeline:
                 uid="42",
                 subject="Invoice",
                 sender="billing@acme.com",
-                received_at=datetime.now(tz=timezone.utc),
+                received_at=datetime.now(tz=UTC),
                 attachments=[pdf_path],
             )
         ]

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def _check_duplicate_invoice(
-    invoice: Invoice, dedup_db: "DeduplicateDB | None"
+    invoice: Invoice, dedup_db: DeduplicateDB | None
 ) -> bool:
     """True if (vendor_id, invoice_number) seen within the last 365 days."""
     if dedup_db is None:
@@ -122,7 +122,7 @@ def run_anomaly_checks(
     invoice: Invoice,
     rules_config: AnomalyRulesConfig,
     defaults: DefaultsConfig,
-    dedup_db: "DeduplicateDB | None" = None,
+    dedup_db: DeduplicateDB | None = None,
 ) -> list[str]:
     """
     Run all enabled anomaly rules against the invoice.

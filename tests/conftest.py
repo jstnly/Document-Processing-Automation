@@ -55,8 +55,8 @@ def image_invoice_pdf(tmp_path: Path) -> Path:
     An image-based PDF (text rendered as pixels) for testing the OCR path.
     pdfplumber will extract near-zero characters from it.
     """
-    from PIL import Image, ImageDraw
     import fitz
+    from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (612, 300), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)

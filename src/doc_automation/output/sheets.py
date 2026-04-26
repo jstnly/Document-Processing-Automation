@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 
 from doc_automation.extraction.invoice import Invoice
 from doc_automation.output.base import OutputAdapter
@@ -44,7 +43,7 @@ class GoogleSheetsAdapter(OutputAdapter):
                 f"Environment variable {self.credentials_env!r} is not set. "
                 "Point it to a Google service-account JSON key file."
             )
-        creds = Credentials.from_service_account_file(
+        creds = Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
             creds_path,
             scopes=["https://www.googleapis.com/auth/spreadsheets"],
         )

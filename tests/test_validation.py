@@ -6,8 +6,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
-
 from doc_automation.config import AnomalyRule, AnomalyRulesConfig, COARow, DefaultsConfig
 from doc_automation.extraction.invoice import Invoice, LineItem
 from doc_automation.validation.anomaly import has_blocking_anomaly, run_anomaly_checks

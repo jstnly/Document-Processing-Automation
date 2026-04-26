@@ -12,7 +12,7 @@ import json
 import logging
 import sqlite3
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -91,7 +91,7 @@ class Outbox:
 
     def put(self, invoice: Invoice, error: str) -> None:
         """Enqueue an invoice for retry."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         self._conn.execute(
             "INSERT INTO outbox (created_at, next_retry_at, invoice_json, last_error) "
             "VALUES (?, ?, ?, ?)",
@@ -102,7 +102,7 @@ class Outbox:
 
     def drain(self) -> list[tuple[int, Invoice]]:
         """Return all entries due for retry (next_retry_at <= now)."""
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         rows = self._conn.execute(
             "SELECT id, invoice_json FROM outbox WHERE next_retry_at <= ? ORDER BY id",
             (now,),
@@ -128,7 +128,7 @@ class Outbox:
             return
         attempts = row[0] + 1
         delay = _retry_delay(attempts)
-        next_retry = datetime.now(tz=timezone.utc) + delay
+        next_retry = datetime.now(tz=UTC) + delay
         self._conn.execute(
             "UPDATE outbox SET attempt_count = ?, next_retry_at = ?, last_error = ? "
             "WHERE id = ?",
@@ -146,4 +146,5 @@ class Outbox:
             pass
 
     def __len__(self) -> int:
-        return self._conn.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
+        row = self._conn.execute("SELECT COUNT(*) FROM outbox").fetchone()
+        return int(row[0])

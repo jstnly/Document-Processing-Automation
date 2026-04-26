@@ -14,6 +14,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from doc_automation.extraction.invoice import LineItem
     from doc_automation.extraction.template import FieldConfig
     from doc_automation.parsing.document import ParsedDocument
 
@@ -22,7 +23,7 @@ from doc_automation.extraction.utils import parse_amount, parse_re_flags
 logger = logging.getLogger(__name__)
 
 
-def apply_regex(text: str, cfg: "FieldConfig") -> str | None:
+def apply_regex(text: str, cfg: FieldConfig) -> str | None:
     """
     Apply a regex pattern to text. Returns the first capture group, stripped.
     Falls back to cfg.default on no match or compile error.
@@ -39,7 +40,7 @@ def apply_regex(text: str, cfg: "FieldConfig") -> str | None:
     return cfg.default
 
 
-def apply_anchor(doc: "ParsedDocument", cfg: "FieldConfig") -> str | None:
+def apply_anchor(doc: ParsedDocument, cfg: FieldConfig) -> str | None:
     """
     Find an anchor string in the document words, then look for the nearest
     word in the specified direction within max_distance points.
@@ -83,9 +84,9 @@ def apply_anchor(doc: "ParsedDocument", cfg: "FieldConfig") -> str | None:
 
 
 def extract_field(
-    doc: "ParsedDocument",
+    doc: ParsedDocument,
     field_name: str,
-    cfg: "FieldConfig",
+    cfg: FieldConfig,
 ) -> str | None:
     """Dispatch to the correct strategy for one field."""
     if cfg.strategy == "regex":
@@ -111,9 +112,9 @@ _COL_SYNONYMS: dict[str, re.Pattern[str]] = {
 
 
 def extract_line_items(
-    doc: "ParsedDocument",
-    cfg: "FieldConfig",
-) -> list:
+    doc: ParsedDocument,
+    cfg: FieldConfig,
+) -> list[LineItem]:
     """
     Extract line items from pdfplumber tables stored in doc.raw_tables.
 
@@ -178,19 +179,19 @@ def extract_line_items(
                 amount = None
 
                 for col_idx, cell in enumerate(cells):
-                    field = col_map.get(col_idx)
-                    if not field:
+                    col_field = col_map.get(col_idx)
+                    if not col_field:
                         continue
                     val = cell.strip()
                     if not val:
                         continue
-                    if field == "description":
+                    if col_field == "description":
                         description = val
-                    elif field == "quantity":
+                    elif col_field == "quantity":
                         quantity = parse_amount(val)
-                    elif field == "unit_price":
+                    elif col_field == "unit_price":
                         unit_price = parse_amount(val)
-                    elif field == "amount":
+                    elif col_field == "amount":
                         amount = parse_amount(val)
 
                 if description or amount is not None:

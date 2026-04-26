@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
-from doc_automation.config import AnomalyRulesConfig, AnomalyRule, DefaultsConfig
+from doc_automation.config import AnomalyRule, AnomalyRulesConfig, DefaultsConfig
 from doc_automation.dedup import DeduplicateDB
 from doc_automation.extraction.invoice import Invoice
 from doc_automation.validation.anomaly import run_anomaly_checks
@@ -24,7 +24,7 @@ def make_invoice(
     inv.invoice_number = number
     inv.invoice_date = date.today()
     inv.total = Decimal("500.00")
-    inv.processed_at = datetime.now(tz=timezone.utc)
+    inv.processed_at = datetime.now(tz=UTC)
     return inv
 
 
@@ -69,9 +69,8 @@ class TestDeduplicateDB:
 
     def test_days_window_excludes_old_entries(self, tmp_path: Path) -> None:
         db = DeduplicateDB(tmp_path / "dedup.sqlite")
-        inv = make_invoice()
-        # Manually insert an old entry
-        old_ts = (datetime.now(tz=timezone.utc) - timedelta(days=400)).isoformat()
+        # Manually insert an old entry (no need to create a full Invoice here)
+        old_ts = (datetime.now(tz=UTC) - timedelta(days=400)).isoformat()
         db._conn.execute(
             "INSERT INTO seen_invoices (vendor_id, invoice_number, processed_at) VALUES (?, ?, ?)",
             ("acme-inc", "INV-001", old_ts),
@@ -137,8 +136,9 @@ class TestIMAPRetry:
     """Tests for the _with_retry helper in imap.py."""
 
     def test_retry_succeeds_on_second_attempt(self) -> None:
-        from doc_automation.email_ingest.imap import _with_retry
         import imaplib
+
+        from doc_automation.email_ingest.imap import _with_retry
 
         call_count = 0
 
@@ -154,8 +154,9 @@ class TestIMAPRetry:
         assert call_count == 2
 
     def test_retry_raises_after_all_attempts(self) -> None:
-        from doc_automation.email_ingest.imap import _with_retry
         import imaplib
+
+        from doc_automation.email_ingest.imap import _with_retry
 
         def always_fails():
             raise imaplib.IMAP4.error("permanent failure")
@@ -179,8 +180,9 @@ class TestIMAPRetry:
         assert call_count == 1
 
     def test_no_sleep_on_first_attempt_success(self) -> None:
-        from doc_automation.email_ingest.imap import _with_retry
         import time
+
+        from doc_automation.email_ingest.imap import _with_retry
 
         start = time.monotonic()
         result = _with_retry(lambda: 42, attempts=3)
