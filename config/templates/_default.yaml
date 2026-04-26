@@ -55,3 +55,9 @@ fields:
     strategy: regex
     pattern: '\b(USD|EUR|GBP|CAD|AUD|NZD|JPY|CHF|MXN)\b'
     default: 'USD'
+
+  line_items:
+    strategy: table
+    # header_pattern matches the row that labels the line-item columns.
+    # Leaving columns empty triggers auto-detection from header cell text.
+    header_pattern: 'description|item|service|product'

@@ -3,6 +3,8 @@ Extraction strategies: regex, anchor, table.
 
 Each strategy receives the ParsedDocument (+ config) and returns a raw string
 value (or None). Post-processing (amount/date parsing) happens in extractor.py.
+The table strategy is an exception: it returns list[LineItem] directly via
+extract_line_items() and is dispatched separately in extractor.py.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
     from doc_automation.extraction.template import FieldConfig
     from doc_automation.parsing.document import ParsedDocument
 
-from doc_automation.extraction.utils import parse_re_flags
+from doc_automation.extraction.utils import parse_amount, parse_re_flags
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +93,113 @@ def extract_field(
     if cfg.strategy == "anchor":
         return apply_anchor(doc, cfg)
     if cfg.strategy == "table":
-        # Table strategy extracts structured line items — handled separately
-        # in extractor.py via pdfplumber table detection.
+        # Table strategy returns list[LineItem] — callers must use extract_line_items().
         return cfg.default
     logger.warning("Unknown strategy '%s' for field '%s'", cfg.strategy, field_name)
     return cfg.default
+
+
+# ── Column-name synonyms for auto-detection ───────────────────────────────────
+# unit_price must be checked before quantity so "Unit Price" doesn't match
+# the `units?` part of the quantity pattern first.
+_COL_SYNONYMS: dict[str, re.Pattern[str]] = {
+    "description": re.compile(r"desc|item|service|detail|product|name", re.IGNORECASE),
+    "unit_price":  re.compile(r"unit\s*price|unit\s*cost|rate|price\s*ea", re.IGNORECASE),
+    "quantity":    re.compile(r"qty|quantity|units?|hrs?|hours?", re.IGNORECASE),
+    "amount":      re.compile(r"amount|total|ext(?:ension)?|price$", re.IGNORECASE),
+}
+
+
+def extract_line_items(
+    doc: "ParsedDocument",
+    cfg: "FieldConfig",
+) -> list:
+    """
+    Extract line items from pdfplumber tables stored in doc.raw_tables.
+
+    Uses cfg.header_pattern to locate the header row (defaults to a broad
+    description/item pattern), and cfg.columns to map column positions to
+    LineItem fields. If cfg.columns is empty, auto-detects columns from the
+    header cell text using _COL_SYNONYMS.
+
+    Returns list[LineItem] (imported inline to avoid circular imports).
+    """
+    from doc_automation.extraction.invoice import LineItem  # local to avoid cycle
+
+    if not doc.raw_tables:
+        return []
+
+    header_re = re.compile(
+        cfg.header_pattern or r"description|item|service|product",
+        re.IGNORECASE,
+    )
+    items: list[LineItem] = []
+
+    for page_tables in doc.raw_tables:
+        for table in page_tables:
+            if not table:
+                continue
+
+            # Find the header row and build column → field mapping
+            header_idx: int | None = None
+            col_map: dict[int, str] = {}
+
+            for row_idx, row in enumerate(table):
+                cells = [c or "" for c in row]
+                if header_re.search(" ".join(cells)):
+                    header_idx = row_idx
+                    if cfg.columns:
+                        # Explicit column order from template
+                        for col_idx, col_name in enumerate(cfg.columns):
+                            if col_idx < len(cells):
+                                col_map[col_idx] = col_name.lower()
+                    else:
+                        # Auto-detect from header cell text
+                        for col_idx, cell_text in enumerate(cells):
+                            for field, pattern in _COL_SYNONYMS.items():
+                                if pattern.search(cell_text.strip()):
+                                    col_map[col_idx] = field
+                                    break
+                    break
+
+            if header_idx is None or not col_map:
+                logger.debug("No line-item table header found in a table; skipping")
+                continue
+
+            # Parse data rows
+            for row in table[header_idx + 1:]:
+                cells = [c or "" for c in row]
+                if not any(c.strip() for c in cells):
+                    continue  # blank row
+
+                description = ""
+                quantity = None
+                unit_price = None
+                amount = None
+
+                for col_idx, cell in enumerate(cells):
+                    field = col_map.get(col_idx)
+                    if not field:
+                        continue
+                    val = cell.strip()
+                    if not val:
+                        continue
+                    if field == "description":
+                        description = val
+                    elif field == "quantity":
+                        quantity = parse_amount(val)
+                    elif field == "unit_price":
+                        unit_price = parse_amount(val)
+                    elif field == "amount":
+                        amount = parse_amount(val)
+
+                if description or amount is not None:
+                    items.append(LineItem(
+                        description=description,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        amount=amount,
+                    ))
+
+    logger.debug("Extracted %d line items from tables", len(items))
+    return items

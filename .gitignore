@@ -23,6 +23,7 @@ working/
 quarantine/
 /output/
 outbox.sqlite
+dedup.sqlite
 
 # Credentials
 credentials/

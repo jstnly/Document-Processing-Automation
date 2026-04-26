@@ -45,3 +45,7 @@ fields:
     strategy: regex
     pattern: '\b(USD|EUR|GBP|CAD)\b'
     default: 'USD'
+
+  line_items:
+    strategy: table
+    header_pattern: 'description|item|service'

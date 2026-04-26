@@ -37,6 +37,7 @@ def extract_text_pdf(path: Path) -> ParsedDocument:
 
     words: list[Word] = []
     page_texts: list[str] = []
+    raw_tables: list[list[list[list[str | None]]]] = []
 
     with pdfplumber.open(str(path)) as pdf:
         for page_num, page in enumerate(pdf.pages):
@@ -57,6 +58,9 @@ def extract_text_pdf(path: Path) -> ParsedDocument:
                     )
                 )
 
+            # Tables for line-item extraction
+            raw_tables.append(page.extract_tables() or [])
+
     logger.debug(
         "Text PDF %s: %d pages, %d words",
         path.name, len(page_texts), len(words),
@@ -67,4 +71,5 @@ def extract_text_pdf(path: Path) -> ParsedDocument:
         page_texts=page_texts,
         words=words,
         is_ocr=False,
+        raw_tables=raw_tables,
     )
