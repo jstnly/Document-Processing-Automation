@@ -166,7 +166,7 @@ class Pipeline:
         except Exception as exc:
             logger.error("output: write failed for %s: %s", path.name, exc)
             result.errors += 1
-            if self._outbox:
+            if self._outbox is not None:
                 self._outbox.put(invoice, str(exc))
             if self._audit:
                 self._audit.log_invoice(invoice, status="output_error", error=str(exc))
