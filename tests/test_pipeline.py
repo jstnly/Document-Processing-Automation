@@ -326,3 +326,268 @@ class TestPipeline:
         r = PipelineResult(processed=5, blocked=1, output_rows=4)
         assert "processed=5" in str(r)
         assert "blocked=1" in str(r)
+
+    # ── _drain_outbox paths ───────────────────────────────────────────────────
+
+    def test_drain_outbox_logs_audit_on_success(self, tmp_path: Path) -> None:
+        """Line 109: audit logged when outbox drain succeeds."""
+        audit_path = tmp_path / "audit.jsonl"
+        audit = AuditLogger(audit_path)
+        outbox = Outbox(tmp_path / "outbox.sqlite")
+        outbox.put(make_invoice(number="DRAIN-AU"), "original")
+
+        mock_output = MagicMock()
+        mock_output.write_rows.return_value = 1
+        pipeline = self._make_pipeline(
+            tmp_path, output_adapter=mock_output, audit=audit, outbox=outbox
+        )
+        result = pipeline.run()
+
+        assert result.outbox_retried == 1
+        entries = [json.loads(ln) for ln in audit_path.read_text().strip().splitlines()]
+        assert any(e["status"] == "ok" for e in entries)
+
+    # ── _ingest_emails paths ──────────────────────────────────────────────────
+
+    def test_ingest_email_fetch_error_increments_errors(self, tmp_path: Path) -> None:
+        """Lines 122-125: fetch_new raises → result.errors incremented, pipeline continues."""
+        mock_email = MagicMock()
+        mock_email.fetch_new.side_effect = OSError("IMAP gone")
+        pipeline = self._make_pipeline(tmp_path, email_source=mock_email)
+        result = pipeline.run()
+        assert result.errors == 1
+        assert result.processed == 0
+
+    def test_ingest_email_failed_attachment_sets_success_false(
+        self, tmp_path: Path
+    ) -> None:
+        """Line 134: attachment that fails extraction sets success=False → no mark_processed."""
+        from unittest.mock import patch
+
+        from doc_automation.email_ingest.base import EmailMessage
+
+        bad_pdf = tmp_path / "working" / "bad.pdf"
+        bad_pdf.parent.mkdir(parents=True, exist_ok=True)
+        bad_pdf.write_bytes(b"not a pdf")
+
+        mock_email = MagicMock()
+        mock_email.fetch_new.return_value = [
+            EmailMessage(
+                uid="99",
+                subject="Bad Invoice",
+                sender="x@x.com",
+                received_at=datetime.now(tz=UTC),
+                attachments=[bad_pdf],
+            )
+        ]
+
+        pipeline = self._make_pipeline(tmp_path, email_source=mock_email)
+        with patch("doc_automation.pipeline.extract_file", side_effect=ValueError("bad")):
+            pipeline.run()
+
+        mock_email.mark_processed.assert_not_called()
+
+    def test_ingest_email_mark_processed_failure_logged(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 139-140: mark_processed raises → warning logged, pipeline doesn't crash."""
+        import fitz
+
+        from doc_automation.email_ingest.base import EmailMessage
+
+        pdf_path = tmp_path / "working" / "ok.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((50, 100), "ACME Supplies Inc.\nTotal: $500.00")
+        doc.save(str(pdf_path))
+
+        mock_email = MagicMock()
+        mock_email.fetch_new.return_value = [
+            EmailMessage(
+                uid="77",
+                subject="Invoice",
+                sender="bill@acme.com",
+                received_at=datetime.now(tz=UTC),
+                attachments=[pdf_path],
+            )
+        ]
+        mock_email.mark_processed.side_effect = RuntimeError("IMAP closed")
+
+        pipeline = self._make_pipeline(
+            tmp_path, email_source=mock_email, templates_dir=Path("config/templates")
+        )
+        result = pipeline.run()  # must not raise
+        assert result.processed >= 1
+
+    # ── _process_attachment / _safe_extract paths ─────────────────────────────
+
+    def test_safe_extract_parse_failure_quarantines(self, tmp_path: Path) -> None:
+        """Lines 181-188: extract_file raises → file quarantined, errors incremented."""
+        from unittest.mock import patch
+
+        pdf_path = tmp_path / "bad.pdf"
+        pdf_path.write_bytes(b"junk")
+
+        audit_path = tmp_path / "audit.jsonl"
+        audit = AuditLogger(audit_path)
+
+        pipeline = self._make_pipeline(tmp_path, audit=audit)
+        with patch("doc_automation.pipeline.extract_file", side_effect=ValueError("corrupt")):
+            result = pipeline._safe_extract(pdf_path, email_id=None, result=PipelineResult())
+
+        assert result is None
+        quarantine = make_config(tmp_path).paths.quarantine_dir
+        assert any(quarantine.iterdir())
+        entries = [json.loads(ln) for ln in audit_path.read_text().strip().splitlines()]
+        assert entries[0]["status"] == "parse_error"
+
+    def test_blocking_anomaly_quarantines_invoice(self, tmp_path: Path) -> None:
+        """Lines 156-157, 202-207: invoice with blocking flag → quarantined, audit logged."""
+        from unittest.mock import patch
+
+        import fitz
+
+        pdf_path = tmp_path / "ok.pdf"
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((50, 100), "ACME Supplies Inc.\nTotal: $500.00")
+        doc.save(str(pdf_path))
+
+        audit_path = tmp_path / "audit.jsonl"
+        audit = AuditLogger(audit_path)
+        pipeline = self._make_pipeline(
+            tmp_path, audit=audit, templates_dir=Path("config/templates")
+        )
+
+        with patch("doc_automation.pipeline.has_blocking_anomaly", return_value=True):
+            result = pipeline._process_attachment(
+                pdf_path, email_id=None, result=PipelineResult()
+            )
+
+        assert result is None
+        quarantined = list(make_config(tmp_path).paths.quarantine_dir.iterdir())
+        assert quarantined
+        entries = [json.loads(ln) for ln in audit_path.read_text().strip().splitlines()]
+        assert any(e["status"] == "blocked" for e in entries)
+
+    def test_output_write_failure_queues_to_outbox_and_audits(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 163-172: write_rows raises → invoice put in outbox, audit output_error."""
+        import fitz
+
+        pdf_path = tmp_path / "ok.pdf"
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((50, 100), "ACME Supplies Inc.\nTotal: $500.00")
+        doc.save(str(pdf_path))
+
+        audit_path = tmp_path / "audit.jsonl"
+        audit = AuditLogger(audit_path)
+        outbox = Outbox(tmp_path / "outbox.sqlite")
+        mock_output = MagicMock()
+        mock_output.write_rows.side_effect = OSError("sheets down")
+
+        pipeline = self._make_pipeline(
+            tmp_path,
+            output_adapter=mock_output,
+            audit=audit,
+            outbox=outbox,
+            templates_dir=Path("config/templates"),
+        )
+        result = pipeline._process_attachment(
+            pdf_path, email_id=None, result=PipelineResult()
+        )
+
+        assert result is not None  # invoice returned even on output error
+        assert len(outbox) == 1
+        entries = [json.loads(ln) for ln in audit_path.read_text().strip().splitlines()]
+        assert any(e["status"] == "output_error" for e in entries)
+
+    def test_move_to_quarantine_handles_dest_collision(self, tmp_path: Path) -> None:
+        """Lines 217-218: quarantine destination already exists → unique name used."""
+        config = make_config(tmp_path)
+        quarantine = config.paths.quarantine_dir
+        quarantine.mkdir(parents=True, exist_ok=True)
+
+        pdf_path = tmp_path / "invoice.pdf"
+        pdf_path.write_bytes(b"data")
+        (quarantine / "invoice.pdf").write_bytes(b"earlier copy")
+
+        pipeline = self._make_pipeline(tmp_path)
+        pipeline._move_to_quarantine(pdf_path)
+
+        files = list(quarantine.iterdir())
+        assert len(files) == 2  # original + renamed
+
+    def test_move_to_quarantine_handles_move_error(self, tmp_path: Path) -> None:
+        """Lines 219-222: shutil.move raises → warning logged, no crash."""
+        from unittest.mock import patch
+
+        pdf_path = tmp_path / "invoice.pdf"
+        pdf_path.write_bytes(b"data")
+
+        pipeline = self._make_pipeline(tmp_path)
+        with patch("doc_automation.pipeline.shutil.move", side_effect=OSError("locked")):
+            pipeline._move_to_quarantine(pdf_path)  # must not raise
+
+    def test_drain_outbox_records_dedup(self, tmp_path: Path) -> None:
+        """Line 109: dedup.record called when outbox drain succeeds."""
+        outbox = Outbox(tmp_path / "outbox.sqlite")
+        outbox.put(make_invoice(number="DEDUP-DR"), "original")
+
+        mock_dedup = MagicMock()
+        mock_output = MagicMock()
+        mock_output.write_rows.return_value = 1
+
+        pipeline = Pipeline(
+            config=make_config(tmp_path),
+            rules=make_rules(),
+            coa=make_coa(),
+            output_adapter=mock_output,
+            outbox=outbox,
+            dedup_db=mock_dedup,
+            templates_dir=tmp_path / "templates",
+        )
+        result = pipeline.run()
+
+        assert result.outbox_retried == 1
+        mock_dedup.record.assert_called_once()
+
+    def test_process_attachment_success_records_dedup_and_audits(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 163, 165: dedup.record and audit logged on successful write_rows."""
+        import fitz
+
+        from doc_automation.dedup import DeduplicateDB
+
+        pdf_path = tmp_path / "ok.pdf"
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((50, 100), "ACME Supplies Inc.\nInvoice No: INV-DA-01\nTotal: $500.00")
+        doc.save(str(pdf_path))
+
+        audit_path = tmp_path / "audit.jsonl"
+        audit = AuditLogger(audit_path)
+        dedup = DeduplicateDB(tmp_path / "dedup.sqlite")
+        mock_output = MagicMock()
+        mock_output.write_rows.return_value = 1
+
+        pipeline = Pipeline(
+            config=make_config(tmp_path),
+            rules=make_rules(),
+            coa=make_coa(),
+            output_adapter=mock_output,
+            audit_logger=audit,
+            dedup_db=dedup,
+            templates_dir=Path("config/templates"),
+        )
+        result = pipeline._process_attachment(
+            pdf_path, email_id=None, result=PipelineResult()
+        )
+
+        assert result is not None
+        entries = [json.loads(ln) for ln in audit_path.read_text().strip().splitlines()]
+        assert any(e["status"] == "ok" for e in entries)
