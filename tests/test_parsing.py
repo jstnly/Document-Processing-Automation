@@ -58,6 +58,20 @@ def test_is_text_pdf_false_for_image_pdf(image_invoice_pdf: Path) -> None:
     assert is_text_pdf(image_invoice_pdf) is False
 
 
+def test_is_text_pdf_false_for_zero_pages(tmp_path: Path) -> None:
+    """pdf.py:26 — PDF whose pdfplumber reports no pages returns False."""
+    from unittest.mock import MagicMock, patch
+
+    mock_pdf = MagicMock()
+    mock_pdf.pages = []
+    mock_ctx = MagicMock()
+    mock_ctx.__enter__ = MagicMock(return_value=mock_pdf)
+    mock_ctx.__exit__ = MagicMock(return_value=False)
+
+    with patch("pdfplumber.open", return_value=mock_ctx):
+        assert is_text_pdf(tmp_path / "fake.pdf") is False
+
+
 # ── Text PDF extraction ───────────────────────────────────────────────────────
 
 

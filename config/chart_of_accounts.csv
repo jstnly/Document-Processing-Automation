@@ -1,5 +1,5 @@
 gl_code,name,vendor_match,keyword_match,default_for_unmatched
-6010,Office Supplies,.*staples|.*office.?depot|.*quill,.*paper|.*toner|.*printer|.*office.supply,false
+6010,Office Supplies,.*acme.supplies|.*staples|.*office.?depot|.*quill,.*paper|.*toner|.*printer|.*office.supply,false
 6020,Software & Subscriptions,.*microsoft|.*adobe|.*github|.*slack|.*dropbox|.*zoom|.*salesforce,.*subscription|.*license|.*saas|.*cloud.plan,false
 6030,Professional Services,,.*consulting|.*advisory|.*legal|.*audit|.*accounting|.*bookkeeping,false
 6040,Telecommunications,.*at&t|.*verizon|.*comcast|.*spectrum|.*t-mobile,.*phone|.*cellular|.*internet|.*broadband|.*telecom,false
