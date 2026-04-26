@@ -1,0 +1,47 @@
+# Vendor template: ACME Supplies Inc.
+# Covers invoices that contain "ACME" in the header.
+# Higher priority than _default so it is checked first.
+
+match: 'ACME\s+Supplies'
+priority: 10
+
+fields:
+  invoice_number:
+    strategy: regex
+    pattern: 'Invoice\s+No:\s*([A-Z0-9\-]+)'
+    flags: IGNORECASE
+
+  invoice_date:
+    strategy: regex
+    pattern: 'Invoice\s+Date:\s*(.+?)(?:\n|Due)'
+    flags: IGNORECASE
+
+  due_date:
+    strategy: regex
+    pattern: 'Due\s+Date:\s*(.+?)(?:\n|$)'
+    flags: IGNORECASE
+
+  vendor_name:
+    strategy: regex
+    pattern: '^(ACME\s+Supplies[^\n]*)'
+    flags: IGNORECASE|MULTILINE
+
+  subtotal:
+    strategy: regex
+    pattern: 'Subtotal:\s*\$?([\d,]+\.\d{2})'
+    flags: IGNORECASE
+
+  tax_amount:
+    strategy: regex
+    pattern: 'Tax\s*(?:\(\d+%\))?:\s*\$?([\d,]+\.\d{2})'
+    flags: IGNORECASE
+
+  total:
+    strategy: regex
+    pattern: '(?<!Sub)Total:\s*\$?([\d,]+\.\d{2})'
+    flags: IGNORECASE
+
+  currency:
+    strategy: regex
+    pattern: '\b(USD|EUR|GBP|CAD)\b'
+    default: 'USD'
