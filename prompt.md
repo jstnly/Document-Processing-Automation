@@ -513,7 +513,7 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-**Phases 1–7 complete** (2026-04-25). All core pipeline stages built and tested. System is feature-complete for v1 — only Phase 8 polish (README, retry hardening) remains.
+**All phases complete** (2026-04-25). Core pipeline + all post-Phase-7 hardening done. 186 tests passing, 2 skipped (OCR — require system Tesseract).
 
 Completed phases:
 
@@ -526,15 +526,20 @@ Completed phases:
 | 5 | `feat/output` | output/csv_writer.py, excel.py, sheets.py, build_adapter() factory; 28 tests; fixed .gitignore `output/` anchoring |
 | 6 | `feat/email-ingest` | email_ingest/imap.py (IMAP4_SSL), base.py (EmailSource ABC), gmail.py + outlook.py stubs; 20 tests |
 | 7 | `feat/pipeline` | pipeline.py (Pipeline orchestrator), audit.py (JSONL audit log), outbox.py (SQLite retry queue); CLI `run`, `process-file`, `replay-quarantine` all wired; 20 tests |
+| Post-7 | `feat/dedup` | dedup.py (DeduplicateDB SQLite); fixed anomaly flags being discarded; wired dedup through pipeline + CLI; 17 tests |
+| Post-7 | `feat/imap-retry` | IMAP `_with_retry()` exponential backoff (1→2→4s, 3 attempts); 4 tests |
+| Post-7 | `feat/strategies` | raw_tables in ParsedDocument; pdfplumber table extraction; extract_line_items() with auto column detection; line_items field in templates; dedup.sqlite to .gitignore; 8 tests |
 
-**Test totals**: 161 passing, 2 skipped (OCR tests — require system Tesseract), 74% overall coverage.
-
-**v1 complete** (2026-04-25). All 8 phases built, tested, and merged to main. Ready for production use.
+**Test totals**: 186 passing, 2 skipped, 76% overall coverage.
 
 ## Decisions
 
 _(append-only log — most recent at top, format: `YYYY-MM-DD — <decision> — <one-line why>`)_
 
+- **2026-04-25** — `_COL_SYNONYMS` dict checks `unit_price` before `quantity` — "Unit Price" header text contains "unit" which matches `units?`; checking the more-specific pattern first prevents misclassification
+- **2026-04-25** — `raw_tables: list[list[list[list[str|None]]]]` added to `ParsedDocument` — pdfplumber table data for line-item extraction; populated only by extract_text_pdf (not OCR path, where tables can't be detected)
+- **2026-04-25** — `DeduplicateDB` is separate from `AuditLogger` — audit log is JSONL (grep-friendly); dedup needs fast key-value lookups, so SQLite is the right tool; one concern per store
+- **2026-04-25** — IMAP retry catches only `imaplib.IMAP4.error / OSError / TimeoutError` — lets `ValueError` (bad config) and `KeyboardInterrupt` propagate normally without retry
 - **2026-04-25** — `Outbox.__del__` closes SQLite connection — suppresses Python 3.14 ResourceWarning in tests without requiring callers to always call `close()`
 - **2026-04-25** — Outbox exponential backoff: 5 min base × 2^attempts, capped at 24 h — fast first retry, safe ceiling, matches expected transient failure durations
 - **2026-04-25** — Audit log is append-only JSONL, not SQLite — grep/tail/jq friendly; rotation is an OS concern; the pipeline never needs to query it
@@ -559,22 +564,19 @@ _(things blocked on user input — clear them before assuming)_
 
 ## Next Steps
 
-**Phase 8 — Polish (final before v1 complete):**
+**Phase 8 — Polish (final v1 gate):**
 
-1. Write `README.md` — aimed at non-developers. Must cover:
-   - Prerequisites (Python 3.11+, Tesseract install command per OS)
-   - Installation: `pip install -e .`
-   - Configuration walkthrough: copy `.env.example` → `.env`, edit `config/config.yaml`
-   - Running: `python -m doc_automation validate-config`, then `process-file`, then `run`
-   - Adding a vendor template (point to `CLAUDE.md` for detail)
-   - Troubleshooting: quarantine dir, audit log location, IMAP credential errors
+1. **`mypy --strict src/`** — run and fix any type errors. Most of the codebase already has type annotations; main gaps are likely `Any` usage in config.py and the `list` return from `extract_line_items`.
 
-2. Smoke-test end-to-end with a real PDF:
-   - Drop a sample invoice in `samples/invoices/`
-   - Run `python -m doc_automation process-file samples/invoices/<file>.pdf`
-   - Confirm a row appears in the configured output (CSV / Excel)
-   - Confirm an audit entry appears in `logs/audit.jsonl`
+2. **`ruff check src/ tests/`** — fix any lint warnings.
 
-3. Update Status to "v1 complete" and close out Open Questions.
+3. **Smoke-test end-to-end**:
+   ```bash
+   python -m doc_automation validate-config
+   python -m doc_automation process-file samples/invoices/acme_sample.pdf
+   # confirm row in output/invoices.csv and entry in logs/audit.jsonl
+   ```
 
-4. (Optional) Add retry logic with exponential back-off to `IMAPSource.fetch_new()` for transient network errors.
+4. **Close Open Questions** — confirm USD default and $10,000 threshold with user.
+
+5. Once all checks pass: update Status to "**v1 complete**" with the date.
