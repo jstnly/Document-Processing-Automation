@@ -631,3 +631,22 @@ def test_select_template_no_match_raises() -> None:
     tmpl = VendorTemplate.model_construct(name="never", match="[invalid", priority=0, fields={})
     with pytest.raises(ValueError, match="No template matched"):
         select_template("anything", [tmpl])
+
+
+def test_load_template_pydantic_validation_error(tmp_path: Path) -> None:
+    """Valid YAML dict that fails pydantic validation (missing required 'match')."""
+    bad = tmp_path / "no_match.yaml"
+    bad.write_text("priority: 5\n")  # 'match' is required by VendorTemplate
+    with pytest.raises(ValueError):
+        load_template(bad)
+
+
+def test_extract_line_items_no_matching_header_logs_debug() -> None:
+    """Tables where no row matches header_pattern are silently skipped (line 142)."""
+    table = [
+        ["Column A", "Column B"],
+        ["value1", "value2"],
+    ]
+    doc = _doc_with_tables([[table]])
+    cfg = FieldConfig(strategy="table", header_pattern="description|item")
+    assert extract_line_items(doc, cfg) == []
