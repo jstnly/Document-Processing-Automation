@@ -83,7 +83,7 @@ mypy src/
 3. Set `priority` > 0 (higher = tried first; default template is priority 0)
 4. Override any field patterns that differ from the default
 5. Test: `python -m doc_automation process-file samples/invoices/<vendor_invoice>.pdf`
-6. Add at least one positive and one negative test in `tests/test_extraction.py` *(Phase 3)*
+6. Add at least one positive and one negative test in `tests/test_extraction.py`
 
 ### Add a GL code to the chart of accounts
 1. Edit `config/chart_of_accounts.csv`
@@ -103,11 +103,23 @@ mypy src/
 2. Implement the check in `src/doc_automation/validation/anomaly.py` keyed on `rule.name`
 3. Add positive + negative tests in `tests/test_anomaly.py`
 
+## v1 status (2026-04-25)
+
+- **211 tests passing**, 2 skipped (OCR — require system Tesseract), all modules ≥85% coverage
+- **`mypy --strict`** clean across all 32 source files
+- **`ruff check`** clean (61 issues fixed in Phase 8)
+- All 8 phases complete + post-Phase-7 hardening (dedup, IMAP retry, line item extraction)
+- Type stubs installed: `types-PyYAML`, `types-openpyxl`, `types-python-dateutil`
+
 ## Recent decisions (most recent first)
 
+- **2026-04-25** — `_COL_SYNONYMS` checks `unit_price` before `quantity` — "Unit Price" contains "unit" matching `units?`; more-specific pattern must come first
+- **2026-04-25** — `extract_line_items` dispatched separately from `extract_field` — returns `list[LineItem]` not `str | None`; handled as special case in `apply_template()`
+- **2026-04-25** — `LineItem` imported via `TYPE_CHECKING` in `strategies.py` and locally at runtime inside `extract_line_items` — avoids `strategies → invoice` circular import
+- **2026-04-25** — `raw_tables: list[list[list[list[str|None]]]]` added to `ParsedDocument` — pdfplumber table data for line-item extraction; populated only by `extract_text_pdf`, not OCR path
 - **2026-04-25** — `Outbox.__del__` closes SQLite to suppress Python 3.14 ResourceWarning without requiring callers to always call `close()`
 - **2026-04-25** — Audit log is append-only JSONL (not SQLite) — grep/tail/jq friendly; pipeline never needs to query it
-- **2026-04-25** — `.gitignore output/` changed to `/output/` — the original pattern matched `src/doc_automation/output/` silently preventing source files from being committed
+- **2026-04-25** — `.gitignore output/` changed to `/output/` — original pattern matched `src/doc_automation/output/` silently preventing source files from being committed
 - **2026-04-25** — `IMAPSource._connect()` is lazy — lets tests inject a mock connection; avoids network at construction time
 - **2026-04-25** — Google Sheets adapter catches `gspread.exceptions.WorksheetNotFound` specifically — not a bare `except`, so auth failures aren't swallowed
 - **2026-04-25** — Used `hatchling` as build backend (over setuptools) — modern, zero-config for src layout
