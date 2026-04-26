@@ -17,7 +17,7 @@ _CONFIDENCE_THRESHOLD = 30  # discard tokens below this Tesseract confidence
 
 def _check_tesseract() -> bool:
     try:
-        import pytesseract
+        import pytesseract  # type: ignore[import-untyped]
 
         pytesseract.get_tesseract_version()
         return True
@@ -54,7 +54,7 @@ def _words_to_page_text(words: list[Word]) -> str:
     return "\n".join(" ".join(w.text for w in line) for line in lines)
 
 
-def ocr_image(image: "Image", page_num: int = 0) -> tuple[list[Word], str]:
+def ocr_image(image: Image, page_num: int = 0) -> tuple[list[Word], str]:
     """
     Run Tesseract on a PIL Image.
 

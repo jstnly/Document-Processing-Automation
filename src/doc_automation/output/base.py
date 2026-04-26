@@ -19,5 +19,5 @@ class OutputAdapter(ABC):
         Raises on unrecoverable error (caller should catch and queue to outbox).
         """
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027 — optional override, not abstract
         """Release any open resources. Called by the pipeline after each run."""

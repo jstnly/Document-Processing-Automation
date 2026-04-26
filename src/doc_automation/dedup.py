@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from doc_automation.extraction.invoice import Invoice
@@ -78,7 +78,7 @@ class DeduplicateDB:
         ts = (
             invoice.processed_at.isoformat()
             if invoice.processed_at
-            else datetime.now(tz=timezone.utc).isoformat()
+            else datetime.now(tz=UTC).isoformat()
         )
         self._conn.execute(
             "INSERT INTO seen_invoices (vendor_id, invoice_number, processed_at) "

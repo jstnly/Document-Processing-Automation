@@ -14,9 +14,11 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from email.header import decode_header, make_header
 from pathlib import Path
+from typing import Any
 
 from doc_automation.config import MailboxConfig
 from doc_automation.email_ingest.base import EmailMessage, EmailSource
@@ -30,7 +32,9 @@ _RETRY_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1.0  # seconds; doubled on each attempt (1 → 2 → 4)
 
 
-def _with_retry(fn, *args, attempts: int = _RETRY_ATTEMPTS, **kwargs):
+def _with_retry(
+    fn: Callable[..., Any], *args: Any, attempts: int = _RETRY_ATTEMPTS, **kwargs: Any
+) -> Any:
     """Call fn(*args, **kwargs), retrying on IMAP / network errors."""
     delay = _RETRY_BASE_DELAY
     last_exc: Exception = RuntimeError("no attempts made")
@@ -138,9 +142,9 @@ class IMAPSource(EmailSource):
                 from email.utils import parsedate_to_datetime
                 received_at = parsedate_to_datetime(date_str)
                 if received_at.tzinfo is None:
-                    received_at = received_at.replace(tzinfo=timezone.utc)
+                    received_at = received_at.replace(tzinfo=UTC)
             except Exception:
-                received_at = datetime.now(tz=timezone.utc)
+                received_at = datetime.now(tz=UTC)
 
             attachments = self._save_attachments(msg, uid, working_dir, allowed_types)
             if not attachments:
@@ -186,7 +190,7 @@ class IMAPSource(EmailSource):
             filename = _safe_filename(_decode_str(filename))
             dest = working_dir / f"{uid}_{filename}"
             payload = part.get_payload(decode=True)
-            if not payload:
+            if not payload or not isinstance(payload, bytes):
                 continue
             dest.write_bytes(payload)
             saved.append(dest)

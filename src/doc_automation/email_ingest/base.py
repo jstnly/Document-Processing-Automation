@@ -34,5 +34,5 @@ class EmailSource(ABC):
     def mark_processed(self, uid: str) -> None:
         """Mark a message as seen / move to processed folder."""
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027 — optional override, not abstract
         """Release the connection. Safe to call multiple times."""

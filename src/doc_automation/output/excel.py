@@ -37,12 +37,14 @@ class ExcelAdapter(OutputAdapter):
         else:
             wb = openpyxl.Workbook()
             ws = wb.active
-            ws.title = self.sheet_name  # type: ignore[union-attr]
-            ws.append(self.columns)  # type: ignore[union-attr]
+            assert ws is not None
+            ws.title = self.sheet_name
+            ws.append(self.columns)
 
+        assert ws is not None
         for invoice in invoices:
             row_dict = invoice.to_dict()
-            ws.append([row_dict.get(col, "") for col in self.columns])  # type: ignore[union-attr]
+            ws.append([row_dict.get(col, "") for col in self.columns])
 
         wb.save(str(self.file_path))
         logger.info("Excel: wrote %d rows to %s", len(invoices), self.file_path)

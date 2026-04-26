@@ -15,8 +15,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import shutil
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from doc_automation.audit import AuditLogger
@@ -149,7 +149,7 @@ class Pipeline:
         if invoice is None:
             return None
 
-        invoice.processed_at = datetime.now(tz=timezone.utc)
+        invoice.processed_at = datetime.now(tz=UTC)
         result.processed += 1
 
         if has_blocking_anomaly(invoice.anomaly_flags, self._rules):
@@ -225,7 +225,7 @@ class Pipeline:
         invoice = extract_file(path, self._templates_dir)
         invoice.source_email_id = email_id
         invoice.attachment_sha256 = _sha256(path)
-        invoice.processed_at = datetime.now(tz=timezone.utc)
+        invoice.processed_at = datetime.now(tz=UTC)
         match_gl_code(invoice, self._coa)
         new_flags = run_anomaly_checks(
             invoice, self._rules, self._config.defaults, dedup_db=self._dedup

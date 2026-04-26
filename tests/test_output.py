@@ -85,7 +85,7 @@ class TestCSVAdapter:
         adapter.write_rows([make_invoice(number="INV-002")])
         with open(path, newline="", encoding="utf-8") as fh:
             lines = fh.readlines()
-        header_lines = [l for l in lines if l.startswith("vendor_name")]
+        header_lines = [ln for ln in lines if ln.startswith("vendor_name")]
         assert len(header_lines) == 1
 
     def test_overwrite_mode_replaces_file(self, tmp_path: Path) -> None:
@@ -120,7 +120,7 @@ class TestCSVAdapter:
         adapter = CSVAdapter(file_path=path, columns=COLUMNS, append=False)
         adapter.write_rows([])
         with open(path, newline="", encoding="utf-8") as fh:
-            lines = [l for l in fh.readlines() if l.strip()]
+            lines = [ln for ln in fh.readlines() if ln.strip()]
         assert len(lines) == 1  # header only
 
     def test_extra_invoice_fields_ignored(self, tmp_path: Path) -> None:

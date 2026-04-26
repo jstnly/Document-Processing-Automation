@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 
 from doc_automation.config import (
+    AnomalyRulesConfig,
     COARow,
     Config,
     ConfigError,
-    AnomalyRulesConfig,
     load_all_configs,
     load_anomaly_rules,
     load_chart_of_accounts,

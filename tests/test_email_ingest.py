@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import email as stdlib_email
 import email.mime.application
 import email.mime.multipart
 import email.mime.text
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,9 +12,7 @@ import pytest
 
 from doc_automation.config import MailboxConfig, MailboxFilters
 from doc_automation.email_ingest import build_email_source
-from doc_automation.email_ingest.base import EmailMessage, EmailSource
 from doc_automation.email_ingest.imap import IMAPSource
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -270,7 +266,7 @@ class TestIMAPSource:
 
         def fetch_side(uid, _fmt):
             if uid == "10":
-                raise IOError("network error")
+                raise OSError("network error")
             return ("OK", [(b"1 (RFC822 {100})", raw_good)])
 
         conn.fetch.side_effect = fetch_side

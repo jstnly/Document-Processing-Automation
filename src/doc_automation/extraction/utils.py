@@ -37,7 +37,8 @@ def parse_date(raw: str | None) -> date | None:
     try:
         from dateutil import parser as _dateutil
 
-        return _dateutil.parse(raw, dayfirst=False).date()
+        parsed: date = _dateutil.parse(raw, dayfirst=False).date()
+        return parsed
     except Exception:
         return None
 
