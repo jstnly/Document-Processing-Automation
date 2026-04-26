@@ -527,9 +527,9 @@ Completed phases:
 | 6 | `feat/email-ingest` | email_ingest/imap.py (IMAP4_SSL), base.py (EmailSource ABC), gmail.py + outlook.py stubs; 20 tests |
 | 7 | `feat/pipeline` | pipeline.py (Pipeline orchestrator), audit.py (JSONL audit log), outbox.py (SQLite retry queue); CLI `run`, `process-file`, `replay-quarantine` all wired; 20 tests |
 
-**Test totals**: 152 passing, 2 skipped (OCR tests — require system Tesseract), 74% overall coverage.
+**Test totals**: 161 passing, 2 skipped (OCR tests — require system Tesseract), 74% overall coverage.
 
-**Currently on**: Phase 8 — polish (README.md, smoke-test end-to-end)
+**v1 complete** (2026-04-25). All 8 phases built, tested, and merged to main. Ready for production use.
 
 ## Decisions
 
