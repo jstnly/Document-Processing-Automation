@@ -183,7 +183,8 @@ class Pipeline:
         invoice.source_email_id = email_id
         invoice.attachment_sha256 = _sha256(path)
         match_gl_code(invoice, self._coa)
-        run_anomaly_checks(invoice, self._rules, self._config.defaults)
+        new_flags = run_anomaly_checks(invoice, self._rules, self._config.defaults)
+        invoice.anomaly_flags.extend(f for f in new_flags if f not in invoice.anomaly_flags)
         return invoice
 
     def _quarantine(
@@ -217,7 +218,8 @@ class Pipeline:
         invoice.attachment_sha256 = _sha256(path)
         invoice.processed_at = datetime.now(tz=timezone.utc)
         match_gl_code(invoice, self._coa)
-        run_anomaly_checks(invoice, self._rules, self._config.defaults)
+        new_flags = run_anomaly_checks(invoice, self._rules, self._config.defaults)
+        invoice.anomaly_flags.extend(f for f in new_flags if f not in invoice.anomaly_flags)
         return invoice
 
 
