@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "doc-automation"
+version = "0.1.0"
+description = "Deterministic invoice processing automation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "pdfplumber>=0.10",
+    "pymupdf>=1.23",
+    "pytesseract>=0.3",
+    "Pillow>=10.0",
+    "openpyxl>=3.1",
+    "gspread>=5.12",
+    "google-auth>=2.23",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.1",
+    "mypy>=1.5",
+    "types-PyYAML>=6.0",
+    "hypothesis>=6.80",
+]
+gmail = ["google-api-python-client>=2.100"]
+outlook = ["O365>=2.0"]
+
+[project.scripts]
+doc-automation = "doc_automation.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/doc_automation"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=src/doc_automation --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+mypy_path = "src"
+packages = ["doc_automation"]
