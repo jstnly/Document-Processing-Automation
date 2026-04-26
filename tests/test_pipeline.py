@@ -207,7 +207,9 @@ class TestOutbox:
 
         inv = make_invoice(number="LI-01")
         inv.line_items = [
-            LineItem(description="Widget", quantity=D("2"), unit_price=D("10.00"), amount=D("20.00")),
+            LineItem(
+                description="Widget", quantity=D("2"), unit_price=D("10.00"), amount=D("20.00")
+            ),
             LineItem(description="Tax", quantity=None, unit_price=None, amount=None),
         ]
         outbox = Outbox(tmp_path / "outbox.sqlite")

@@ -29,6 +29,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
 
 def test_setup_logging_calls_basicconfig_info() -> None:
     import logging
+
     from doc_automation.cli import _setup_logging
     with patch("doc_automation.cli.logging") as mock_logging:
         mock_logging.DEBUG = logging.DEBUG
@@ -41,6 +42,7 @@ def test_setup_logging_calls_basicconfig_info() -> None:
 
 def test_setup_logging_calls_basicconfig_debug() -> None:
     import logging
+
     from doc_automation.cli import _setup_logging
     with patch("doc_automation.cli.logging") as mock_logging:
         mock_logging.DEBUG = logging.DEBUG
@@ -114,6 +116,7 @@ def test_process_file_config_error(
 def test_process_file_success(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Full process-file path with a real PDF and mocked output adapter."""
     import fitz
+
     from doc_automation.cli import _cmd_process_file
 
     pdf_path = tmp_path / "inv.pdf"
@@ -143,6 +146,7 @@ def test_process_file_output_write_fails(
 ) -> None:
     """process-file returns 1 when write_rows raises."""
     import fitz
+
     from doc_automation.cli import _cmd_process_file
 
     pdf_path = tmp_path / "inv.pdf"
@@ -221,7 +225,8 @@ def test_run_with_mailbox_builds_and_closes_email_source(
     mock_pipeline.run.return_value = PipelineResult()
 
     # Build a config with mailbox before patching
-    from doc_automation.config import MailboxConfig, load_all_configs as _real_load
+    from doc_automation.config import MailboxConfig
+    from doc_automation.config import load_all_configs as _real_load
     real_config, real_rules, real_coa = _real_load(CONFIG_DIR)
     config_with_mailbox = real_config.model_copy(update={"mailbox": MailboxConfig(
         host="imap.example.com",
@@ -268,6 +273,7 @@ def test_replay_quarantine_processes_pdfs(
 ) -> None:
     """replay-quarantine replays files found in the configured quarantine dir."""
     import fitz
+
     from doc_automation.cli import _cmd_replay_quarantine
 
     # Create a quarantine PDF
@@ -331,7 +337,7 @@ def test_replay_quarantine_logs_failure(
 
 def _load_configs_with_quarantine(tmp_path: Path):
     """Return real configs with quarantine_dir patched to tmp_path/quarantine."""
-    from doc_automation.config import load_all_configs, PathsConfig
+    from doc_automation.config import PathsConfig, load_all_configs
 
     config, rules, coa = load_all_configs(CONFIG_DIR)
     config = config.model_copy(
