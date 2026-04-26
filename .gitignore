@@ -21,7 +21,7 @@ ENV/
 logs/
 working/
 quarantine/
-output/
+/output/
 outbox.sqlite
 
 # Credentials
