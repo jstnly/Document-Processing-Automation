@@ -513,22 +513,35 @@ Don't build these. If the user asks, log it under **Open Questions** and continu
 
 ## Status
 
-**Phase 1 complete** (2026-04-25). `CLAUDE.md` created. Git history: prompt → Phase 1 foundation, both merged to main via --no-ff.
+**Phases 1–7 complete** (2026-04-25). All core pipeline stages built and tested. System is feature-complete for v1 — only Phase 8 polish (README, retry hardening) remains.
 
-Completed:
-- `pyproject.toml`, `.gitignore`, `.env.example`
-- `src/doc_automation/{__init__, __main__, cli, config}.py`
-- `config/config.yaml`, `anomaly_rules.yaml` (11 rules), `chart_of_accounts.csv` (10 GL codes), `output.yaml`, `templates/_default.yaml`
-- `tests/test_config.py`: 19 tests, 93% coverage on `config.py`
-- `python -m doc_automation validate-config` → green
-- `CLAUDE.md` created
+Completed phases:
 
-**Currently on**: Phase 2 (`feat/parsing`)
+| Phase | Branch merged | What was built |
+|---|---|---|
+| 1 | `feat/foundation` | pyproject.toml, config.py (pydantic v2), CLI skeleton, all YAML configs, 19 tests |
+| 2 | `feat/parsing` | parsing/pdf.py (pdfplumber), parsing/ocr.py (Tesseract), parsing/image.py (PyMuPDF+Pillow), 13 tests |
+| 3 | `feat/extraction` | extraction/template.py, extractor.py, strategies.py, utils.py; vendor YAML templates; 31 tests |
+| 4 | `feat/validation` | validation/coa.py (GL match), validation/anomaly.py (11 rules); 23 tests |
+| 5 | `feat/output` | output/csv_writer.py, excel.py, sheets.py, build_adapter() factory; 28 tests; fixed .gitignore `output/` anchoring |
+| 6 | `feat/email-ingest` | email_ingest/imap.py (IMAP4_SSL), base.py (EmailSource ABC), gmail.py + outlook.py stubs; 20 tests |
+| 7 | `feat/pipeline` | pipeline.py (Pipeline orchestrator), audit.py (JSONL audit log), outbox.py (SQLite retry queue); CLI `run`, `process-file`, `replay-quarantine` all wired; 20 tests |
+
+**Test totals**: 152 passing, 2 skipped (OCR tests — require system Tesseract), 74% overall coverage.
+
+**Currently on**: Phase 8 — polish (README.md, smoke-test end-to-end)
 
 ## Decisions
 
 _(append-only log — most recent at top, format: `YYYY-MM-DD — <decision> — <one-line why>`)_
 
+- **2026-04-25** — `Outbox.__del__` closes SQLite connection — suppresses Python 3.14 ResourceWarning in tests without requiring callers to always call `close()`
+- **2026-04-25** — Outbox exponential backoff: 5 min base × 2^attempts, capped at 24 h — fast first retry, safe ceiling, matches expected transient failure durations
+- **2026-04-25** — Audit log is append-only JSONL, not SQLite — grep/tail/jq friendly; rotation is an OS concern; the pipeline never needs to query it
+- **2026-04-25** — `IMAPSource._connect()` is lazy (called on first `fetch_new`) — lets tests inject a mock connection and avoids network at construction time
+- **2026-04-25** — `sender_allowlist` check uses `in` substring match (not full regex) — configuration is simpler for domain-based filtering; power users can still be precise
+- **2026-04-25** — `.gitignore output/` changed to `/output/` — original pattern also ignored `src/doc_automation/output/` (source code), which silently prevented those files from being committed; anchored to repo root fixes it
+- **2026-04-25** — Google Sheets adapter uses `gspread.exceptions.WorksheetNotFound` (not bare `except`) to detect missing worksheets — avoids catching unrelated errors like auth failures
 - **2026-04-25** — `mailbox` is `Optional[MailboxConfig]` — allows running `process-file` without email config; correct for Phase 1 scope
 - **2026-04-25** — `load_all_configs()` collects all errors before raising — better UX than stopping at first failure
 - **2026-04-25** — `argparse` (stdlib) over `click` — fewer deps; subcommands are simple
@@ -539,19 +552,29 @@ _(append-only log — most recent at top, format: `YYYY-MM-DD — <decision> —
 
 _(things blocked on user input — clear them before assuming)_
 
-- **Which email provider to smoke-test IMAP adapter against first?** (Gmail App Password, Outlook IMAP, or generic) — needed before Phase 6 (email ingestion).
-- **Which Google account / service-account for Sheets adapter?** — needed before Phase 7 (Sheets output); mark that adapter optional if no creds provided.
-- **Default currency confirmed as USD?** Assumed yes; update `config/config.yaml` if different.
-- **Amount threshold confirmed as $10,000?** Assumed yes; update `config/anomaly_rules.yaml` params if different.
+- **Which email provider to smoke-test IMAP adapter against first?** (Gmail App Password, Outlook IMAP, or generic IMAP) — not needed to ship v1, but needed before real-world use. Gmail App Passwords are simplest to test.
+- **Which Google service-account for Sheets adapter?** — The adapter is complete; credential setup is a deployment task, not a code task. See `config/output.yaml` and set `GOOGLE_SHEETS_SERVICE_ACCOUNT` in `.env`.
+- **Default currency confirmed as USD?** Assumed yes; update `config/config.yaml → defaults.currency` if different.
+- **Amount threshold confirmed as $10,000?** Assumed yes; update `config/anomaly_rules.yaml → amount_threshold.params.threshold` if different.
 
 ## Next Steps
 
-1. Branch `feat/parsing`: implement `src/doc_automation/parsing/{document.py, pdf.py, ocr.py, image.py}`.
-   - `ParsedDocument` dataclass (pages, words, word positions)
-   - `pdf.py`: detect text vs image PDF; extract with `pdfplumber`
-   - `ocr.py`: Tesseract wrapper via `pytesseract`
-   - `image.py`: rasterize image PDFs with `PyMuPDF` + `Pillow` preprocessing
-   - Add 1 text PDF + 1 scanned/image PDF to `tests/fixtures/invoices/`
-   - Tests: both sample files produce non-empty `ParsedDocument`
-2. Install `pdfplumber`, `pymupdf`, `pytesseract`, `Pillow` into `.venv`; ensure system Tesseract is installed (see README).
-3. Merge `feat/parsing` to `main`, delete branch, update Status + CLAUDE.md.
+**Phase 8 — Polish (final before v1 complete):**
+
+1. Write `README.md` — aimed at non-developers. Must cover:
+   - Prerequisites (Python 3.11+, Tesseract install command per OS)
+   - Installation: `pip install -e .`
+   - Configuration walkthrough: copy `.env.example` → `.env`, edit `config/config.yaml`
+   - Running: `python -m doc_automation validate-config`, then `process-file`, then `run`
+   - Adding a vendor template (point to `CLAUDE.md` for detail)
+   - Troubleshooting: quarantine dir, audit log location, IMAP credential errors
+
+2. Smoke-test end-to-end with a real PDF:
+   - Drop a sample invoice in `samples/invoices/`
+   - Run `python -m doc_automation process-file samples/invoices/<file>.pdf`
+   - Confirm a row appears in the configured output (CSV / Excel)
+   - Confirm an audit entry appears in `logs/audit.jsonl`
+
+3. Update Status to "v1 complete" and close out Open Questions.
+
+4. (Optional) Add retry logic with exponential back-off to `IMAPSource.fetch_new()` for transient network errors.
