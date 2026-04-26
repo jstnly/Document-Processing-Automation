@@ -241,6 +241,14 @@ class TestOutbox:
         outbox = Outbox(tmp_path / "outbox.sqlite")
         outbox.reschedule(9999, "irrelevant")  # must not raise
 
+    def test_del_swallows_exception_on_double_close(self, tmp_path: Path) -> None:
+        """outbox.py:145-146 — __del__ except branch: swallows error if conn already closed."""
+        from unittest.mock import patch
+
+        outbox = Outbox(tmp_path / "outbox.sqlite")
+        with patch.object(outbox._conn, "close", side_effect=Exception("already closed")):
+            outbox.__del__()  # must not raise
+
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
